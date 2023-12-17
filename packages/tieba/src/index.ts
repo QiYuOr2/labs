@@ -11,35 +11,37 @@
 
 import { css } from '@uss/shared';
 
-function findAndEditElement(selector: string, callback: { (item: any): any }) {
-  const elements = document.querySelectorAll(selector);
-  if (!elements.length) {
-    setTimeout(() => findAndRemoveElement(selector), 500);
-  } else {
-    elements.forEach((item) => callback(item));
-  }
-}
-
-function findAndRemoveElement(selector: string) {
-  findAndEditElement(selector, (item) => item.remove());
-}
-
+// == 删除不需要的元素 ==
 css`
-  /* == 删除不需要的元素 == */
+  #head,
+  .share_btn_wrapper,
   .creative-shortcut-tip-container,
   .tbui_aside_fbar_button,
+  .tb_rich_poster_container,
   .replace_tip,
   .right_section {
     display: none !important;
   }
+`;
 
-  /* == 主要内容样式调整 == */
-  .l_container {
-    /* TODO 调整整体宽度 */
+// == 主要内容样式调整 ==
+css`
+  .l_container,
+  .content,
+  .core_title_wrap_bright,
+  .pb_content,
+  .pb_footer,
+  .core_reply_wrapper,
+  .nav_list,
+  .p_thread,
+  [class^='thread_theme'] {
+    width: 100% !important;
   }
 
   /* 长图展开 */
-  .replace_div {
+  .replace_div,
+  .BDE_Image {
+    width: 100% !important;
     height: unset !important;
   }
 
@@ -58,6 +60,9 @@ css`
   }
 
   /* 用户信息 */
+  .louzhubiaoshi {
+    top: 0;
+  }
   .l_post .d_author {
     width: 100% !important;
     text-align: left !important;
