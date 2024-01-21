@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "pnpm run --filter=\"./packages/*\" build"
+    "build": "pnpm run --filter=\"./packages/*\" build",
+    "dev:mock": "pnpm run --filter=\"./packages/*\" dev"
   },
   "keywords": [],
   "author": "",
