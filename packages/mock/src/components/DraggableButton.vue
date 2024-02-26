@@ -1,26 +1,24 @@
 <script setup lang="ts">
-import { ref, useCssModule } from 'vue';
+import { ref } from 'vue';
 import { useDraggable } from '@vueuse/core';
 
 const entry = ref<HTMLElement | null>(null);
 const halfHeight = document.documentElement.clientHeight / 2;
 const { style } = useDraggable(entry, { initialValue: { x: 8, y: halfHeight - 50 }, axis: 'y' });
-
-const styles = useCssModule();
 </script>
 
 <template>
-  <div ref="entry" :class="styles.entry" :style="style">
+  <div ref="entry" class="entry" :style="style">
     <slot></slot>
   </div>
 </template>
 
-<style module>
+<style scoped>
 .entry {
   writing-mode: vertical-rl;
   position: fixed;
   background-color: #fff;
-  z-index: 100;
+  z-index: 1999;
   border-radius: 999px;
   user-select: none;
   cursor: pointer;

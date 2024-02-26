@@ -4,4 +4,5 @@ import { config } from '../../tsup.config';
 export default defineConfig({
   ...config,
   format: ['cjs', 'esm'],
+  external: ['vue'],
 });

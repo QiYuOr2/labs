@@ -32,7 +32,13 @@ importers:
       vue-router:
         specifier: ^4.2.5
         version: 4.2.5(vue@3.4.15)
+      xhook:
+        specifier: ^1.6.2
+        version: 1.6.2
     devDependencies:
+      '@types/xhook':
+        specifier: ^1.5.3
+        version: 1.5.3
       '@vitejs/plugin-vue':
         specifier: ^5.0.3
         version: 5.0.3(vite@5.0.12)(vue@3.4.15)
@@ -49,7 +55,11 @@ importers:
         specifier: ^1.8.27
         version: 1.8.27(typescript@5.3.3)
 
-  packages/shared: {}
+  packages/shared:
+    dependencies:
+      vue:
+        specifier: ^3.4.14
+        version: 3.4.15(typescript@5.3.3)
 
   packages/tieba:
     dependencies:
@@ -448,6 +458,10 @@ packages:
   /@types/web-bluetooth@0.0.20:
     resolution: {integrity: sha512-g9gZnnXVq7gM7v3tJCWV/qw7w+KeOlSHAhgF9RytFyifW6AF61hdT2ucrYhPq9hLs5JIryeupHV3qGk95dH9ow==}
     dev: false
+
+  /@types/xhook@1.5.3:
+    resolution: {integrity: sha512-BtBwD7SVDa49utvejEs80EcjWYKfP6A+FHYtiRU8izd5HjFsczORWvg4zaJAHyqSJ5jDijwRP1JgdFaYK/SYZQ==}
+    dev: true
 
   /@vitejs/plugin-vue@5.0.3(vite@5.0.12)(vue@3.4.15):
     resolution: {integrity: sha512-b8S5dVS40rgHdDrw+DQi/xOM9ed+kSRZzfm1T74bMmBDCd8XO87NKlFYInzCtwvtWwXZvo1QxE2OSspTATWrbA==}
@@ -1616,6 +1630,10 @@ packages:
   /wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
     dev: true
+
+  /xhook@1.6.2:
+    resolution: {integrity: sha512-kmOpJ5SyqpubjIgVXWIdTWYqZmTr3mlqaCa8ISg2IirkpvUOfbWeQbJICqVjQ8fo5tkG3FsKi/Pb2TvUOlMuMQ==}
+    dev: false
 
   /yallist@4.0.0:
     resolution: {integrity: sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==}

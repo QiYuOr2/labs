@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { useCssModule } from 'vue';
-import { Pages, useGlobalState } from '../store/global';
+import { Pages, usePageStore } from '../store';
 
-const styles = useCssModule();
-
-const state = useGlobalState();
+const router = usePageStore();
 
 const tabs = [
   { label: '全部规则', value: Pages.Rules },
@@ -13,13 +10,13 @@ const tabs = [
 </script>
 
 <template>
-  <div :class="styles.floating">
-    <div v-if="false" :class="styles.tabs">
+  <div class="floating">
+    <div v-if="false" class="tabs">
       <div
         v-for="tab in tabs"
         :key="tab.value"
-        :class="[styles.tab, { [styles['tab--active']]: state.page.value === tab.value }]"
-        @click="state.toPage(tab.value)"
+        :class="['tab', { 'tab--active': router.current.value === tab.value }]"
+        @click="router.to(tab.value)"
       >
         {{ tab.label }}
       </div>
@@ -28,18 +25,19 @@ const tabs = [
   </div>
 </template>
 
-<style module>
+<style scoped>
 .floating {
   position: fixed;
   top: 1rem;
   bottom: 1rem;
   left: 24px;
-  width: 400px;
+  right: 24px;
+  max-width: 400px;
   background: #fff;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  z-index: 99;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  z-index: 999;
   border: 1px solid #efefef;
-  border-radius: 0.375rem;
+  border-radius: 0.25rem;
 }
 
 .tabs {

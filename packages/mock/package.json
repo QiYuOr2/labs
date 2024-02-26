@@ -12,9 +12,11 @@
     "@vueuse/core": "^10.7.2",
     "colord": "^2.9.3",
     "vue": "^3.4.14",
-    "vue-router": "^4.2.5"
+    "vue-router": "^4.2.5",
+    "xhook": "^1.6.2"
   },
   "devDependencies": {
+    "@types/xhook": "^1.5.3",
     "@vitejs/plugin-vue": "^5.0.3",
     "typescript": "^5.3.3",
     "vite": "^5.0.11",
