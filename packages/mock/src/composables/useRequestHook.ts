@@ -2,6 +2,7 @@ import { MaybeRefOrGetter, toValue } from 'vue';
 import xhook from 'xhook';
 
 export interface Rule {
+  name: string;
   url: string | RegExp;
   response: unknown;
   contains?: boolean;
@@ -23,8 +24,6 @@ function matchURL(url: string, rule: Rule) {
 
 export function useRequestHook(options?: UseRequestHookOptions) {
   xhook.after((request, response) => {
-    console.log(request.url);
-
     const rules = toValue(options?.rules ?? []);
 
     for (const rule of rules) {

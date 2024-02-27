@@ -2,6 +2,8 @@
 import { useRuleStore } from '../store';
 
 const props = defineProps<{
+  index: number;
+  name: string;
   url: string | RegExp;
   enable?: boolean;
   contains?: boolean;
@@ -9,53 +11,57 @@ const props = defineProps<{
 const ruleStore = useRuleStore();
 
 function toggle() {
-  ruleStore.set(props.url, { enable: !props.enable });
+  ruleStore.set(props.index, { enable: !props.enable });
 }
 </script>
 
 <template>
   <div class="rule-item">
-    <div class="code-text-style url">{{ url.toString() }}</div>
-    <div class="contains" v-if="contains">包含模式</div>
+    <div class="name">{{ name }}</div>
+    <div class="url">{{ url.toString() }}</div>
     <div class="enable">
-      <div :class="['button', enable ? 'button--red' : 'button--green']" @click.stop="toggle">{{ enable ? '停用' : '启用' }}</div>
+      <div :class="['button', enable ? 'button--green' : 'button--gray']" @click.stop="toggle">{{ enable ? '已开启' : '禁用中' }}</div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.button {
-  padding: 0.1rem 0.25rem;
-  border: 1px solid #efefef;
-  border-radius: 0.125rem;
-  cursor: pointer;
-}
-
-.button--green {
-  background-color: #67c23a;
-  border-color: #67c23a;
-  color: #fff;
-}
-
-.button--red {
-  background-color: #f56c6c;
-  border-color: #f56c6c;
-  color: #fff;
-}
-
 .rule-item {
-  height: 45px;
+  box-sizing: border-box;
+  padding: 4px 18px;
+  height: 50px;
   display: grid;
   grid-template-areas:
-    'url . enable'
-    'contains . enable';
+    'name . enable'
+    'url contains enable';
+
+  cursor: pointer;
+
+  background-color: #fff;
+  transition: background-color 0.3s;
+}
+.rule-item:hover {
+  background-color: rgb(248 250 252);
+  transition: background-color 0.3s;
+}
+
+.name {
+  grid-area: name;
+  font-size: 1em;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 1em;
+  color: rgba(0, 0, 0, 0.8);
 }
 
 .url {
   grid-area: url;
-  font-size: 1.25em;
+  font-size: 0.9em;
   font-weight: 500;
 
+  color: rgba(0, 0, 0, 0.5);
   /* 一行省略 */
   white-space: nowrap;
   overflow: hidden;
@@ -72,5 +78,6 @@ function toggle() {
   align-items: center;
   justify-content: flex-end;
   margin-left: 1em;
+  font-size: 0.8em;
 }
 </style>

@@ -1,18 +1,10 @@
 import { createGlobalState } from '@vueuse/core';
 import { ref } from 'vue';
 import { Rule } from '../composables';
-
-const user = {};
+import { useGMStorage } from '../composables/useGMStorage';
 
 export const useRuleStore = createGlobalState(() => {
-  const rules = ref<Rule[]>([
-    {
-      url: 'udc.user.getUserInfoByIdgetUserInfoByIdgetUserInfoById/1.0',
-      contains: true,
-      response: user,
-      enable: false,
-    },
-  ]);
+  const rules = useGMStorage<Rule[]>('@uss/mock/rules', []);
 
   function get(url: string | RegExp) {
     return rules.value.find((rule) => rule.url === url);
@@ -40,10 +32,19 @@ export const useRuleStore = createGlobalState(() => {
 
   function add(rule: Rule) {
     rules.value.push(rule);
+    return rules.value.length - 1;
   }
-  function remove(url: string | RegExp) {
+
+  function remove(url: string | RegExp): void;
+  function remove(index: number): void;
+  function remove(arg1: string | RegExp | number) {
+    if (typeof arg1 === 'number') {
+      rules.value.splice(arg1, 1);
+      return;
+    }
+
     for (let i = 0; i < rules.value.length; i++) {
-      if (rules.value[i].url === url) {
+      if (rules.value[i].url === arg1) {
         rules.value.splice(i, 1);
         return;
       }
