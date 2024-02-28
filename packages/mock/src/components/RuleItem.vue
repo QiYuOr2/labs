@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { useRuleStore } from '../store';
 
-const props = defineProps<{
-  index: number;
-  name: string;
-  url: string | RegExp;
-  enable?: boolean;
-  contains?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    index: number;
+    name: string;
+    url: string | RegExp;
+    enable?: boolean;
+    contains?: boolean;
+    type?: 'normal' | 'record';
+  }>(),
+  { type: 'normal' }
+);
 const ruleStore = useRuleStore();
 
 function toggle() {
@@ -16,7 +20,7 @@ function toggle() {
 </script>
 
 <template>
-  <div class="rule-item">
+  <div :class="['rule-item', `rule-item--${type}`]">
     <div class="name">{{ name }}</div>
     <div class="url">{{ url.toString() }}</div>
     <div class="enable">
@@ -67,6 +71,7 @@ function toggle() {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .contains {
   grid-area: contains;
   color: rgba(0, 0, 0, 0.5);
@@ -79,5 +84,22 @@ function toggle() {
   justify-content: flex-end;
   margin-left: 1em;
   font-size: 0.8em;
+}
+
+.rule-item--record {
+  display: block;
+  height: unset;
+}
+.rule-item--record .url {
+  width: 100%;
+  word-break: break-all;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.rule-item--record .enable,
+.rule-item--record .name {
+  display: none;
 }
 </style>

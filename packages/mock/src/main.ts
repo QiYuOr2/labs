@@ -18,6 +18,7 @@ const ruleStore = useRuleStore();
 
 useRequestHook({
   rules: ruleStore.rules,
+  record: ruleStore.record,
   immediate: true,
 });
 

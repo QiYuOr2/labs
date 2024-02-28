@@ -71,10 +71,7 @@ textarea {
   resize: none;
 }
 
-.buttons {
-  display: flex;
-  gap: 1em;
-}
+
 .button {
   flex: 1;
   margin-bottom: 1em;

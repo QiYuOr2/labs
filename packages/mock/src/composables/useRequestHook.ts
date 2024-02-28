@@ -11,6 +11,7 @@ export interface Rule {
 
 interface UseRequestHookOptions {
   rules: MaybeRefOrGetter<Rule[]>;
+  record: MaybeRefOrGetter<Map<string, Rule>>;
   immediate?: boolean;
 }
 
@@ -23,6 +24,8 @@ function matchURL(url: string, rule: Rule) {
 }
 
 export function useRequestHook(options?: UseRequestHookOptions) {
+  const record = toValue(options?.record ?? new Map<string, Rule>());
+
   xhook.after((request, response) => {
     const rules = toValue(options?.rules ?? []);
 
@@ -33,8 +36,16 @@ export function useRequestHook(options?: UseRequestHookOptions) {
 
       if (matchURL(request.url, rule)) {
         response.data = rule.response as any;
-        break;
+        return;
       }
+    }
+
+    if (response.headers['content-type']?.includes('application/json')) {
+      record.set(request.url, {
+        name: '',
+        url: request.url,
+        response: response.data,
+      });
     }
   });
 

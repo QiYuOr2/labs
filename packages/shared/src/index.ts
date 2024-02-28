@@ -1,3 +1,5 @@
 export * from './injectStyles'
 export * from './element'
 export * from './vue'
+export * from './typeof'
+export * from './promiseQueue'

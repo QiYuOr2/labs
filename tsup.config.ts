@@ -36,7 +36,7 @@ function UserScriptPlugin(): Plugin {
 }
 
 export const config: Options = {
-  entry: ['./src/*.ts'],
+  entry: ['./src/**/*.ts'],
   format: ['iife'],
   dts: true,
   splitting: false,

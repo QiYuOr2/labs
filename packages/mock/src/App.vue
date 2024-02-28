@@ -50,4 +50,13 @@ const router = usePageStore();
   border-color: #f3f4f6;
   color: #6b7280;
 }
+
+.buttons {
+  display: flex;
+  gap: 1em;
+}
+
+.buttons .button {
+  flex: 1;
+}
 </style>

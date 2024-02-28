@@ -53,5 +53,7 @@ export const useRuleStore = createGlobalState(() => {
 
   const current = ref<number>(-1);
 
-  return { rules, add, remove, get, set, current };
+  const record = new Map<string, Rule>();
+
+  return { rules, add, remove, get, set, current, record };
 });

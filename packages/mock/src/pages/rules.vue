@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { GM_getValue } from '$';
+import { computed, ref } from 'vue';
 import RuleItem from '../components/RuleItem.vue';
 import { Pages, usePageStore, useRuleStore } from '../store';
+import { useToggle } from '@vueuse/core';
 
 const ruleStore = useRuleStore();
 const router = usePageStore();
@@ -17,16 +19,41 @@ function add() {
 }
 
 function showAll() {
-  console.log('ruleStore.rules.value', ruleStore.rules.value);
-  console.log(`GM_getValue('@uss/mock/rules')`, GM_getValue('@uss/mock/rules'));
+  console.log(ruleStore.rules.value);
+}
+
+const [recordVisible, toggleRecord] = useToggle(false);
+
+function addRecord(url: string, response: any) {
+  ruleStore.current.value = ruleStore.add({ name: '', url, response, contains: true, enable: true });
+  router.to(Pages.Edit);
 }
 </script>
 
 <template>
   <div class="rules">
-    <div class="button" @click="add">添加新规则</div>
-    <div class="button" @click="showAll">控制台输出所有规则</div>
-    <div v-if="ruleStore.rules.value.length">
+    <div class="margin button" @click="add">添加新规则</div>
+    <div class="margin buttons">
+      <div class="button" @click="showAll">控制台输出所有规则</div>
+      <div class="button" @click="toggleRecord()">{{ recordVisible ? '隐藏请求记录' : '查看请求记录' }}</div>
+    </div>
+    <div v-if="recordVisible" class="record">
+      <div class="list">
+        <RuleItem
+          v-for="(rule, i) in ruleStore.record.values()"
+          :key="i"
+          :index="i"
+          :name="rule.name"
+          :url="rule.url"
+          :contains="rule.contains"
+          :enable="rule.enable"
+          @click="addRecord(rule.url as string, rule.response)"
+          style="margin-bottom: 0.5em"
+          type="record"
+        />
+      </div>
+    </div>
+    <div class="list" v-if="ruleStore.rules.value.length">
       <RuleItem
         v-for="(rule, i) in ruleStore.rules.value"
         :key="i"
@@ -46,11 +73,15 @@ function showAll() {
 <style scoped>
 .rules {
   padding: 0.8em 0;
+  overflow-y: auto;
 }
 
-.button {
-  margin: 0 0.7em;
-  margin-bottom: 1em;
+.margin {
+  margin: 0 0.7em 0.7em;
+}
+
+.list {
+  margin-top: 1em;
 }
 
 .empty {

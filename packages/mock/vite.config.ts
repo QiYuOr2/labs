@@ -23,9 +23,9 @@ export default defineConfig({
     monkey({
       entry: 'src/main.ts',
       userscript: {
-        icon: 'https://vitejs.dev/logo.svg',
+        name: '接口模拟',
         namespace: 'qiyuor2/mock',
-        include: '*',
+        match: '://*/*',
         grant: 'unsafeWindow',
         'run-at': 'document-start',
       },
