@@ -27,21 +27,27 @@ function back() {
   }
   router.to(Pages.Rules);
 }
+
+function remove() {
+  ruleStore.remove(ruleStore.current.value);
+  router.to(Pages.Rules);
+}
 </script>
 
 <template>
   <div class="edit">
     <div class="buttons">
-      <div class="button button--green" @click="save">保存</div>
+    <div class="button button--red" @click="remove">删除</div>
       <div class="button" @click="back">返回</div>
     </div>
+      <div class="button button--green" @click="save">保存</div>
     <input type="text" v-model="rule.name" placeholder="名称" />
     <input type="text" v-model="rule.url" placeholder="URL" />
     <div class="checkbox">
       <label for="contains">包含模式</label>
       <input type="checkbox" name="contains" id="contains" v-model="isContains" />
     </div>
-    <textarea v-model="responseText" rows="17" />
+    <textarea v-model="responseText" rows="15" />
   </div>
 </template>
 

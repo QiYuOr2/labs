@@ -4,6 +4,7 @@
   "author": "qiyuor2",
   "description": "接口响应修改",
   "version": "1.0.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
