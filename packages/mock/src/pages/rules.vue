@@ -72,6 +72,7 @@ function addRecord(url: string, response: any) {
 
 <style scoped>
 .rules {
+  height: 100%;
   padding: 0.8em 0;
   overflow-y: auto;
 }

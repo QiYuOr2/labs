@@ -3,7 +3,7 @@
   "private": true,
   "author": "qiyuor2",
   "description": "接口响应修改",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "license": "MIT",
   "type": "module",
   "scripts": {
