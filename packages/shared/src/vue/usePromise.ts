@@ -1,9 +1,11 @@
-import { Ref, ref, shallowRef } from 'vue';
+import { Ref, isRef, ref, shallowRef, watch } from 'vue';
 import { typeIs } from '../typeof';
 
 type DeepPartial<T> = T extends object ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
 
 type PromiseFn<Result, Args extends Array<unknown>> = (...args: Args) => Promise<Result>;
+
+type ToRefArray<T> = T extends Array<unknown> ? { [P in keyof T]: Ref<T[P]> } : T;
 
 interface UsePromiseOptions<Result, Args> {
   /**
@@ -21,7 +23,12 @@ interface UsePromiseOptions<Result, Args> {
   /**
    * 执行 promise 时的参数
    */
-  params?: Args;
+  params?: Args | ToRefArray<Args>;
+
+  /**
+   * 监听的数据变化时重新请求
+   */
+  watch?: ToRefArray<unknown[]>;
 
   onResolve?: (data: Result) => void;
   onReject?: (error: unknown) => void;
@@ -57,6 +64,24 @@ function merge<T>(...resources: Record<string, unknown>[]): T {
   return result as T;
 }
 
+/**
+ * 获取第一个不为空的数组，如果都为空则返回空数组
+ */
+function notEmptyArray<T>(...arrays: T[]): T {
+  return arrays.find((arr) => Array.isArray(arr) && arr.length) || ([] as T);
+}
+
+/**
+ * `[Ref, Ref, Ref] => [Ref.value, Ref.value, Ref.value]`
+ */
+function unwrapRefArray<T extends Array<unknown>>(arr: T | ToRefArray<T>): T {
+  if (!Array.isArray(arr)) {
+    throw new TypeError('The parameter must be an array');
+  }
+
+  return arr.map((item: unknown) => (isRef(item) ? item.value : item)) as T;
+}
+
 export function usePromise<Result, Args extends Array<unknown>>(
   promise: PromiseFn<Result, Args>,
   options?: UsePromiseOptions<Result, Args>
@@ -71,10 +96,17 @@ export function usePromise<Result, Args extends Array<unknown>>(
 
   const loading = ref(false);
 
+  /**
+   * 当请求没有入参时，直接调用 `run()` 即可 \
+   * 如果请求有入参，但调用 `run()` 没有传入对应参数时，会使用 `options.params` 作为入参 \
+   * 当 `options.params` 为 Ref 数组时，会自动取值
+   */
+  function run(): Promise<void>;
+  function run<T extends Args>(...params: T): Promise<void>;
   async function run<T extends Args>(...params: T) {
     loading.value = true;
 
-    const willUseParams = (params || options?.params || []) as Args;
+    const willUseParams = unwrapRefArray(notEmptyArray(params, options?.params!));
 
     try {
       const _result = await promise(...willUseParams);
@@ -93,8 +125,14 @@ export function usePromise<Result, Args extends Array<unknown>>(
     }
   }
 
+  // 立即请求
   if (options?.immediate || typeIs.undef(options?.immediate)) {
-    run(...((options?.params || []) as Args));
+    run();
+  }
+
+  // 监听数据变化重新请求
+  if (options?.watch) {
+    watch(options.watch, () => run());
   }
 
   return {

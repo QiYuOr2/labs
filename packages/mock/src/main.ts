@@ -1,5 +1,5 @@
-import { createApp, Plugin } from 'vue';
 import App from './App.vue';
+import { createApp, Plugin } from 'vue';
 import { useRequestHook } from './composables';
 import { useRuleStore } from './store';
 
