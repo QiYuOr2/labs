@@ -7,11 +7,11 @@ type PromiseFn<Result, Args extends Array<unknown>> = (...args: Args) => Promise
 
 type ToRefArray<T> = T extends Array<unknown> ? { [P in keyof T]: Ref<T[P]> } : T;
 
-interface UsePromiseOptions<Result, Args> {
+interface UsePromiseOptions<Result, Args, FormattedResult = Result> {
   /**
    * result 的初始值，如果 promise 执行失败，result 会被重置为 initialData
    */
-  initialData?: DeepPartial<Result>;
+  initialData?: DeepPartial<FormattedResult>;
 
   /**
    * 立即执行 promise，否则需要手动调用 run
@@ -29,6 +29,8 @@ interface UsePromiseOptions<Result, Args> {
    * 监听的数据变化时重新请求
    */
   watch?: ToRefArray<unknown[]>;
+
+  format?: (originData: Result, data: Result) => FormattedResult;
 
   onResolve?: (data: Result) => void;
   onReject?: (error: unknown) => void;
@@ -82,15 +84,23 @@ function unwrapRefArray<T extends Array<unknown>>(arr: T | ToRefArray<T>): T {
   return arr.map((item: unknown) => (isRef(item) ? item.value : item)) as T;
 }
 
-export function usePromise<Result, Args extends Array<unknown>>(
+export function usePromise<Result, Args extends Array<unknown>, FormattedResult = Result>(
   promise: PromiseFn<Result, Args>,
   options?: UsePromiseOptions<Result, Args>
 ): UsePromiseReturn<Result, Args>;
 
-export function usePromise<Result, Args extends Array<unknown>>(
+export function usePromise<Result, Args extends Array<unknown>, FormattedResult = Result>(
   promise: PromiseFn<Result, Args>,
-  options?: UsePromiseOptions<Result, Args>
+  options?: UsePromiseOptions<Result, Args, FormattedResult>
 ) {
+  if (!options) {
+    options = {};
+  }
+
+  if (!options?.format) {
+    options.format = (origin, result) => (isRecord(origin) && isRecord(result) ? merge(origin, result) : result) as FormattedResult;
+  }
+
   const result = shallowRef<Result | null>((options?.initialData as Result) || null);
   const error = shallowRef<unknown>(null);
 
@@ -110,9 +120,11 @@ export function usePromise<Result, Args extends Array<unknown>>(
 
     try {
       const _result = await promise(...willUseParams);
-      result.value = isRecord(result.value) && isRecord(_result) ? merge(result.value, _result) : _result;
 
       options?.onResolve?.(result.value);
+
+      result.value = isRecord(result.value) && isRecord(_result) ? merge(result.value, _result) : _result;
+      result.value = options!.format!(result.value as unknown as Result, _result);
     } catch (_error) {
       result.value = options?.initialData as Result;
       error.value = _error;
