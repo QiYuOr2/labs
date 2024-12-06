@@ -22,7 +22,7 @@ useRequestHook({
   immediate: true,
 });
 
-addEventListener('DOMContentLoaded', () => {
+addEventListener('load', () => {
   createApp(App)
     .use(Pages)
     .mount(

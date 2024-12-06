@@ -36,11 +36,15 @@ export function useRequestHook(options?: UseRequestHookOptions) {
 
       if (matchURL(request.url, rule)) {
         response.data = rule.response as any;
+
+        if (response.text) {
+          response.text = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        }
         return;
       }
     }
 
-    if (response.headers['content-type']?.includes('application/json')) {
+    if (response.headers['Content-Type']?.includes('application/json')) {
       record.set(request.url, {
         name: '',
         url: request.url,
