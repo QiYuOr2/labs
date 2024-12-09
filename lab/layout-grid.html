@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+
+    <style>
+      #app {
+        width: 100%;
+        height: 800px;
+      }
+
+      #app .container {
+        width: 100%;
+        height: 100%;
+      }
+
+      .container {
+        display: grid;
+        grid-template-areas: var(--layout-template);
+      }
+
+      .container > * {
+        flex: 1;
+      }
+
+      .item {
+        grid-area: var(--item-name);
+        min-width: 200px;
+        min-height: 100px;
+      }
+      .item--list {
+        background: #000;
+        color: #fff;
+      }
+      .item--image {
+        background: #6e98ee;
+      }
+      .item--text {
+        background: #f57e7e;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app"></div>
+  </body>
+
+  <script>
+    const layout = {
+      items: [
+        {
+          type: "list",
+          col: 1,
+          row: 1,
+          colSpan: 1,
+          rowSpan: 2,
+        },
+        {
+          type: "image",
+          col: 2,
+          row: 1,
+          colSpan: 1,
+          rowSpan: 1,
+        },
+        {
+          type: "text",
+          col: 2,
+          row: 2,
+          colSpan: 1,
+          rowSpan: 1,
+        },
+      ],
+      totalRow: 2,
+      totalCol: 2,
+    };
+
+    const app = document.querySelector("#app");
+
+    handleLayout(app, layout);
+
+    function handleLayout(parent, item) {
+      const container = document.createElement("div");
+      container.className = "container";
+      const areas = [];
+
+      const nodes = layout.items.map((item, index) => {
+        const { row, col, rowSpan, colSpan, type } = item;
+        const itemName = `i${index}${type}`;
+        for (let r = row; r < row + rowSpan; r++) {
+          areas[r] = areas[r] ?? [];
+          areas[r].length = col + colSpan;
+          areas[r].fill(itemName, col, col + colSpan);
+        }
+
+        return handleItem({ ...item, name: itemName });
+      });
+
+      const gridTemplateAreas = areas.map((line) => `"${line.join(" ").trim()}"`).join("\n");
+
+      container.style.setProperty("--layout-template", gridTemplateAreas);
+
+      nodes.forEach((node) => container.appendChild(node));
+
+      parent.appendChild(container);
+    }
+
+    function handleItem(item) {
+      const typeMap = {
+        list: createList,
+        text: createText,
+        image: createImage,
+      };
+      const node = document.createElement("div");
+      typeMap[item.type](node, item);
+      node.style.setProperty('--item-name', item.name)
+
+      return node;
+    }
+
+    function createText(node, item) {
+      const classNames = ["item", "item--text"];
+      classNames.forEach((className) => node.classList.add(className));
+      node.innerText = "文本";
+    }
+
+    function createList(node, item) {
+      const classNames = ["item", "item--list"];
+      classNames.forEach((className) => node.classList.add(className));
+      node.innerText = "列表";
+    }
+
+    function createImage(node, item) {
+      const classNames = ["item", "item--image"];
+      classNames.forEach((className) => node.classList.add(className));
+      node.innerText = "图片";
+    }
+  </script>
+</html>
