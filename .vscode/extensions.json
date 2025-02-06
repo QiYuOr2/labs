@@ -1,7 +1,5 @@
 {
   "recommendations": [
     "niceSprite.styled-jsx",
-    "Vue.volar",
-    "Vue.vscode-typescript-vue-plugin",
   ]
 }
