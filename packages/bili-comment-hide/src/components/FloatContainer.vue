@@ -1,54 +1,21 @@
 <script setup lang="ts">
-import { useDraggable, useWindowSize } from '@vueuse/core'
-import { useTemplateRef } from 'vue';
+import { useToggle } from '@vueuse/core';
 
-const el = useTemplateRef('el');
-
-// const INIT_OFFSET_X = 60
-const INIT_OFFSET_X = 360
-
-const { width } = useWindowSize()
-const { x, y } = useDraggable(el, {
-  initialValue: { x: width.value - INIT_OFFSET_X, y: 100 },
-})
-
-function toggle() {
-  if (x.value < width.value - INIT_OFFSET_X) {
-    x.value = width.value - INIT_OFFSET_X
-  } else {
-    x.value = width.value - 350
-  }
-}
+const [isExpand, toggleExpand] = useToggle(true);
 </script>
 
 
 <template>
-  <div :style="{ left: `${x}px`, top: `${y}px`}" class="float-container">
-    <div ref="el" class="float-container__drag-line" @click="toggle"></div>
-    <slot></slot>
+  <div fixed bg-white border border-solid border-stone-2 shadow-sm shadow-stone-400 rounded-xl z="99999" right-2 
+    transition-all duration-300 ease-in-out overflow-hidden top="100px" :w="isExpand ? '300px' : '12'"
+    :h="isExpand ? '60vh' : '12'" :p="isExpand ? '1.3' : '0'">
+    <div ref="el" @click="toggleExpand()" flex items-center justify-center h-12 rounded-lg bg-stone-100 
+    
+      :bg="isExpand ? 'stone-100' : 'white'" :w="isExpand ? 'full' : '12'"  cursor-pointer transition-all duration-300 ease-in-out>
+      评论
+    </div>
+    <div v-show="isExpand" w="300px">
+      <slot></slot>
+    </div>
   </div>
 </template>
-
-
-<style lang="less" scoped>
-.float-container {
-  position: fixed;
-  background-color: white;
-  border: 1px solid #ccc;
-  padding: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-  z-index: 99999;
-
-  &__drag-line {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    cursor: pointer;
-    height: 20px;
-    width: 6px;
-    background-color: #ccc;
-    border-radius: 100000px;
-  }
-}
-</style>

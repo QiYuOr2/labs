@@ -9,9 +9,11 @@
     "preview": "vue-tsc -b && vite preview"
   },
   "dependencies": {
+    "@types/xhook": "^1.5.3",
     "@unocss/reset": "^65.4.3",
     "@vueuse/core": "^10.7.2",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "xhook": "^1.6.2"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
