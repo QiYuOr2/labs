@@ -64,6 +64,7 @@ function remove(value: string) {
       <div flex items="center" mb-2>
         <span mr-1>激活隐藏</span>
         <Switch v-model="isChecked" />
+        <span ml-1 text-xs text-zinc-400>切换后需要刷新页面</span>
       </div>
       <div flex flex-col>
         <InputWithType mb-1 @add="addKeyword" />
