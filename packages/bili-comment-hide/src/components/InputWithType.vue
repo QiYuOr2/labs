@@ -3,7 +3,9 @@ import { ref } from 'vue';
 
 const value = ref('')
 
-function add() {}
+const emits = defineEmits<{
+  (event: 'add', value: string): void
+}>()
 </script>
 
 <template>
@@ -13,8 +15,8 @@ function add() {}
       border="l-none y-none solid slate-200"
       outline="none focus-visible:none focus:none"
     >
-      <option value="keywords">关键字</option>
-      <option value="regex">正则</option>
+      <option value="keywords">关键词</option>
+      <!-- <option value="regex">正则</option> -->
     </select>
     <input w-full px-2 text-sm transition-all border-none text-slate-500  invalid:border-pink-500 invalid:text-pink-500 invalid:focus:border-pink-500 disabled:cursor-not-allowed  disabled:text-slate-400
       bg="transparent autofill:transparent disabled:slate-50"
@@ -26,6 +28,6 @@ function add() {}
     rounded-r
     border="1px solid slate-200"
       disabled:cursor-not-allowed
-      outline="none focus-visible:none focus:none" @click="add">添加</button>
+      outline="none focus-visible:none focus:none" @click="emits('add', value)">添加</button>
   </div>
 </template>

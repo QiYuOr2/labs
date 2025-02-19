@@ -1,56 +1,41 @@
-import { MaybeRefOrGetter, toValue } from 'vue';
-import xhook from 'xhook';
+import { MaybeRefOrGetter, toValue } from "vue";
+import xhook from "xhook";
+
+// x/v2/reply/wbi/main
 
 export interface Rule {
-  name: string;
-  url: string | RegExp;
-  response: unknown;
-  contains?: boolean;
-  enable?: boolean;
+  url: string;
+  response: (originResponse: unknown) => xhook.Response;
 }
 
 interface UseRequestHookOptions {
   rules: MaybeRefOrGetter<Rule[]>;
-  record: MaybeRefOrGetter<Map<string, Rule>>;
   immediate?: boolean;
 }
 
 function matchURL(url: string, rule: Rule) {
-  if (typeof rule.url === 'string') {
-    return rule.contains ? url.includes(rule.url) : url === rule.url;
-  }
-
-  return rule.url.test(url);
+  return url.includes(rule.url);
 }
 
 export function useRequestHook(options?: UseRequestHookOptions) {
-  const record = toValue(options?.record ?? new Map<string, Rule>());
-
   xhook.after((request, response) => {
     const rules = toValue(options?.rules ?? []);
 
-    for (const rule of rules) {
-      if (!rule.enable) {
-        continue;
-      }
+    Object.defineProperty(response, "data", {
+      set(v) {
 
-      if (matchURL(request.url, rule)) {
-        response.data = rule.response as any;
-
-        if (response.text) {
-          response.text = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        for (const rule of rules) {
+          if (matchURL(request.url, rule)) {
+            this._data = rule.response(v);
+            return;
+          }
         }
-        return;
-      }
-    }
-
-    if (response.headers['Content-Type']?.includes('application/json')) {
-      record.set(request.url, {
-        name: '',
-        url: request.url,
-        response: response.data,
-      });
-    }
+        this._data = v;
+      },
+      get() {
+        return this._data;
+      },
+    });
   });
 
   if (options?.immediate) {

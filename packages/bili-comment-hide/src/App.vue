@@ -3,26 +3,59 @@ import { useToggle } from '@vueuse/core';
 import FloatContainer from './components/FloatContainer.vue';
 import Switch from './components/Switch.vue';
 import InputWithType from './components/InputWithType.vue';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
+import { useRequestHook } from './composables/useRequest';
+import { useGMValue } from './composables/useGMValue';
 
 const [isChecked] = useToggle(true);
 
 const tabs = [
-  { name: '关键字', value: 'keywords' },
-  { name: '正则', value: 'regex' },
+  { name: '关键词', value: 'keywords' },
+  // { name: '正则', value: 'regex' },
 ];
 
 const currentTab = ref(tabs[0].value);
 
-const keywords = [
-  '关键字1',
-  '我',
-  '关键字2',
-  '落地了',
-  '关键字2',
-  '这也能缝',
-  '关键字2',
-]
+const keywords = useGMValue<string[]>('keywords', []);
+
+
+function filterWithKeywords(reply: any) {
+  return keywords.value.every(keyword => reply.content.message.indexOf(keyword) === -1);
+}
+
+const requestHook = useRequestHook({
+  rules: [
+    {
+      url: "x/v2/reply/wbi/main",
+      response: (originResponse: any) => {
+        if (originResponse?.data?.replies) {
+          const replies = originResponse.data.replies.slice().filter(filterWithKeywords);
+          originResponse.data.replies = replies;
+        }
+        return originResponse;
+      },
+    },
+  ],
+  immediate: true,
+});
+
+watch(isChecked, (value) => {
+  value ? requestHook.enable() : requestHook.disable();
+});
+
+
+function addKeyword(value: string) {
+  if (value) {
+    keywords.value.push(value);
+  }
+}
+
+function remove(value: string) {
+  const index = keywords.value.indexOf(value);
+  if (index > -1) {
+    keywords.value.splice(index, 1);
+  }
+}
 </script>
 
 <template>
@@ -33,7 +66,7 @@ const keywords = [
         <Switch v-model="isChecked" />
       </div>
       <div flex flex-col>
-        <InputWithType mb-1 />
+        <InputWithType mb-1 @add="addKeyword" />
 
         <div my-2 flex items-start gap-2>
           <div v-for="tab in tabs" :key="tab.value" :class="{ 'text-stone-500': currentTab !== tab.value }"
@@ -42,12 +75,14 @@ const keywords = [
           </div>
         </div>
 
-        <ul p-0 m-0>
-          <li v-for="keyword in keywords" :key="keyword" text-sm text-zinc-500 list-none mb-1 flex items-center justify-between>
-          <span>{{ keyword }}</span>
-          <span cursor-pointer>✕</span>
+        <ul p-0 m-0 overflow-y-scroll h="430px" v-if="keywords.value.length > 0">
+          <li v-for="keyword in keywords.value" :key="keyword" text-sm text-zinc-500 list-none mb-1 flex items-center
+            justify-between pr-1>
+            <span truncate mr-.5>{{ keyword }}</span>
+            <span cursor-pointer p-.5 @click="remove(keyword)">✕</span>
           </li>
         </ul>
+        <div text-sm text-zinc-500 flex justify-center items-center mt-30>这里是空的</div>
       </div>
     </div>
   </FloatContainer>
