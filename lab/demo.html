@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>    
+<body>
+  <div>
+    <div class="overflow-hidden ml-5">
+      <p class="box-border bg-green-300 w-10 h-10 ml-2 float-left ">1</p>
+      <p class="bg-purple-100 w-10 h-10  ">2</p>
+    </div>
+  </div>
+</body>
+
+<script>
+
+  const a = {
+    b: 1,
+    c: () => {
+      console.log(this);
+    }
+  }
+
+  a.c();
+
+  function outer() {
+  const arrow = () => {
+    console.log(arguments);
+  };
+  arrow(1, 2, 3);
+}
+
+outer(10, 20, 30);
+
+
+const t = {a:1,name:1}
+console.log(t)
+
+for (let key in t) {
+    console.log(key); 
+}
+
+</script>
+</html>
