@@ -28,11 +28,11 @@ addEventListener('load', () => {
     .mount(
       (() => {
         console.log('App mounted');
-        const app = document.createElement('div');
-        app.id = 'uss-mock-app';
-        document.body.append(app);
+        const root = document.createElement('div');
+        root.id = 'uss-mock-app';
+        document.body.append(root);
 
-        return app;
+        return root;
       })()
     );
 });
