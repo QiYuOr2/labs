@@ -1,0 +1,27 @@
+:root {
+  --background: #000;
+  --foreground: #fff;
+
+  --text-primary: #fff;
+  --text-secondary: #969696;
+
+  --tab-active-text-color: var(--text-primary);
+  --tab-normal-text-color: var(--text-secondary);
+
+  --table-bg-color: rgba(0, 0, 0, 0.4);
+  --table-border-color: rgba(67, 67, 67, 0.5);
+  --table-cell-text-color: var(--text-primary);
+  --table-title-text-color: var(--text-secondary);
+
+  --radius: 12px;
+  --radius-1\/2: 6px;
+}
+
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+
+  font-size: 14px;
+  letter-spacing: 1px;
+}
