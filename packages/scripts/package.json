@@ -1,0 +1,11 @@
+{
+  "name": "@uss/scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "convert2mp4": "./convert2mp4.cmd"
+  },
+  "dependencies": {
+    "zx": "^7.1.0"
+  }
+}
