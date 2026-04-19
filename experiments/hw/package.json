@@ -1,5 +1,5 @@
 {
-  "name": "@uss/hw",
+  "name": "@labs/hw",
   "version": "1.0.0",
   "description": "",
   "main": "dist/index.js",
@@ -10,7 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@uss/shared": "workspace:*",
     "node-hid": "^3.0.0",
     "protobufjs": "^7.3.0"
   },
