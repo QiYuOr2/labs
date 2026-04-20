@@ -56,13 +56,13 @@ func init() {
 func main() {
 	info := color.New(color.FgHiBlack)
 	step := color.New(color.FgCyan)
-	output := color.New(color.FgGreen, color.Bold)
+	output := color.New(color.FgBlue, color.Bold)
 
 	apiKey := os.Getenv("DEEPSEEK_API_KEY")
 
 	llm := NewLLMClient(apiKey, MODEL_ID, BASE_URL)
 
-	userPrompt := "你好，请帮我查询一下今天杭州的天气，然后根据天气推荐一个合适的旅游景点。"
+	userPrompt := "你好，请帮我查询一下今天东京的天气，然后根据天气推荐一个合适的旅游景点。"
 	promptHistory := []string{fmt.Sprintf("用户请求：%s", userPrompt)}
 
 	fmt.Printf("用户输入：%s\n", userPrompt)
