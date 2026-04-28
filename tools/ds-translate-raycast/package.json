@@ -1,0 +1,89 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "deepseek-translate-to-zh",
+  "title": "DeepSeek Translate to Chinese",
+  "description": "Use the DeepSeek API to translate clipboard text or manually entered text into Chinese.",
+  "icon": "extension-icon.png",
+  "author": "QiYuOr2",
+  "license": "MIT",
+  "categories": [
+    "Productivity"
+  ],
+  "platforms": [
+    "macOS",
+    "Windows"
+  ],
+  "scripts": {
+    "dev": "ray develop",
+    "lint": "ray lint",
+    "fix-lint": "ray lint --fix",
+    "build": "ray build",
+    "publish": "npx @raycast/api@latest publish",
+    "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\\"prepublishOnly\\\" script and rerun \\\"npm publish\\\" again.\\nIf you wanted to publish it to the Raycast Store instead, use \\\"npm run publish\\\" instead.\\n\\n\" && exit 1"
+  },
+  "dependencies": {
+    "@raycast/api": "^1.103.0",
+    "@raycast/utils": "^2.2.1",
+    "openai": "^6.34.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.0.4",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "eslint": "^9.22.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2"
+  },
+  "preferences": [
+    {
+      "name": "deepseekApiKey",
+      "title": "DeepSeek API Key",
+      "description": "API key used to access DeepSeek.",
+      "type": "password",
+      "required": true
+    },
+    {
+      "name": "model",
+      "title": "Model",
+      "description": "DeepSeek model used for translation.",
+      "type": "dropdown",
+      "required": true,
+      "default": "deepseek-v4-flash",
+      "data": [
+        {
+          "title": "deepseek-v4-flash",
+          "value": "deepseek-v4-flash"
+        },
+        {
+          "title": "deepseek-v4-pro",
+          "value": "deepseek-v4-pro"
+        }
+      ]
+    },
+    {
+      "name": "autoCopyResult",
+      "title": "Auto Copy Result",
+      "description": "Automatically copy the translated Chinese text for manual input translation.",
+      "type": "checkbox",
+      "label": "Copy translated result to clipboard",
+      "default": true,
+      "required": false
+    }
+  ],
+  "commands": [
+    {
+      "name": "clipboard-translate",
+      "title": "Translate Clipboard to Chinese",
+      "subtitle": "DeepSeek",
+      "description": "Translate the current clipboard text into Chinese and show the result in Raycast.",
+      "mode": "view"
+    },
+    {
+      "name": "text-translate",
+      "title": "Translate Text to Chinese",
+      "subtitle": "DeepSeek",
+      "description": "Enter text manually and translate it into Chinese.",
+      "mode": "view"
+    }
+  ]
+}
