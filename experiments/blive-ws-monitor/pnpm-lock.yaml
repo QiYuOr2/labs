@@ -1,0 +1,99 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      blive-message-listener:
+        specifier: ^0.5.4
+        version: 0.5.4
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+
+packages:
+
+  '@types/node@25.6.2':
+    resolution: {integrity: sha512-sokuT28dxf9JT5Kady1fsXOvI4HVpjZa95NKT5y9PNTIrs2AsobR4GFAA90ZG8M+nxVRLysCXsVj6eGC7Vbrlw==}
+
+  blive-message-listener@0.5.4:
+    resolution: {integrity: sha512-wo3tf/EVmhPEfr461OS3fzFHAlKELczhxch0Enng+DXzJqunHyV3GISkbn6FGon0ErwI0KMVofaN2IJ9aaVDCg==}
+
+  dotenv@17.4.2:
+    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
+    engines: {node: '>=12'}
+
+  eventemitter3@5.0.4:
+    resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
+
+  long@5.3.2:
+    resolution: {integrity: sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==}
+
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
+
+  protobufjs@8.0.3:
+    resolution: {integrity: sha512-LBYnMWkKLB8fE/ljROPDbCl7mgLSlI+oBe1fAAr5MTqFg4TIi0tYrVVurJvQggOjnUYMQtEZBjrej59ojMNTHQ==}
+    engines: {node: '>=12.0.0'}
+
+  tiny-bilibili-ws@1.0.2:
+    resolution: {integrity: sha512-s3AuofXxOJU3RBRxQhQOI2nqqsu7WJcbGsNI8WyH+5JUYDGl/1tmKpfuk+Ig65u9nHZXuz1v2uUkvByO62oH9Q==}
+
+  undici-types@7.19.2:
+    resolution: {integrity: sha512-qYVnV5OEm2AW8cJMCpdV20CDyaN3g0AjDlOGf1OW4iaDEx8MwdtChUp4zu4H0VP3nDRF/8RKWH+IPp9uW0YGZg==}
+
+  ws@8.20.0:
+    resolution: {integrity: sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+snapshots:
+
+  '@types/node@25.6.2':
+    dependencies:
+      undici-types: 7.19.2
+
+  blive-message-listener@0.5.4:
+    dependencies:
+      protobufjs: 8.0.3
+      tiny-bilibili-ws: 1.0.2
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  dotenv@17.4.2: {}
+
+  eventemitter3@5.0.4: {}
+
+  long@5.3.2: {}
+
+  pako@2.1.0: {}
+
+  protobufjs@8.0.3:
+    dependencies:
+      '@types/node': 25.6.2
+      long: 5.3.2
+
+  tiny-bilibili-ws@1.0.2:
+    dependencies:
+      eventemitter3: 5.0.4
+      pako: 2.1.0
+      ws: 8.20.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  undici-types@7.19.2: {}
+
+  ws@8.20.0: {}

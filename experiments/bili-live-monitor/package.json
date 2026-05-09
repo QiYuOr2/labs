@@ -1,0 +1,8 @@
+{
+  "name": "bili-live-monitor-core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  }
+}
