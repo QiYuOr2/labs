@@ -18,10 +18,12 @@ function sendMessage(options) {
   );
 }
 
+// 544786 12dora
+// 92613 api
+const ROOM_ID = 544786
+
 function main() {
-  // 544786 12dora
-  // 92613 api
-  const instance = startListen(92613, {
+  const instance = startListen(ROOM_ID, {
     onLiveStart: (message) => {
       if (message.raw['live_time']) {
         sendMessage({
@@ -42,15 +44,15 @@ function main() {
     },
     onOpen: () => {
       sendMessage({
-        title: '监听开始',
-        content: '成功建立连接',
+        title: `监听开始`,
+        content: `${ROOM_ID} 成功建立连接`,
         timestamp: Date.now(),
       });
     },
     onClose: () => {
       sendMessage({
-        title: '监听结束',
-        content: '已断开直播间链接',
+        title: `监听结束`,
+        content: `${ROOM_ID} 已断开直播间链接`,
         timestamp: Date.now(),
       });
     },
