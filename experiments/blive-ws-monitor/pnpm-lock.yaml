@@ -11,6 +11,9 @@ importers:
       blive-message-listener:
         specifier: ^0.5.4
         version: 0.5.4
+      dayjs:
+        specifier: ^1.11.20
+        version: 1.11.20
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -22,6 +25,9 @@ packages:
 
   blive-message-listener@0.5.4:
     resolution: {integrity: sha512-wo3tf/EVmhPEfr461OS3fzFHAlKELczhxch0Enng+DXzJqunHyV3GISkbn6FGon0ErwI0KMVofaN2IJ9aaVDCg==}
+
+  dayjs@1.11.20:
+    resolution: {integrity: sha512-YbwwqR/uYpeoP4pu043q+LTDLFBLApUP6VxRihdfNTqu4ubqMlGDLd6ErXhEgsyvY0K6nCs7nggYumAN+9uEuQ==}
 
   dotenv@17.4.2:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
@@ -71,6 +77,8 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  dayjs@1.11.20: {}
 
   dotenv@17.4.2: {}
 
