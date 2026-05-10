@@ -4,3 +4,4 @@ node_modules/
 .local/
 .env
 .dev.vars
+.idea
