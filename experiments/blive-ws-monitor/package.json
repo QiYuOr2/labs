@@ -2,9 +2,9 @@
   "name": "blive-ws-monitor",
   "version": "1.0.0",
   "description": "",
-  "main": "index.mjs",
+  "main": "src/index.mjs",
   "scripts": {
-    "dev": "node index.mjs"
+    "dev": "node src/index.mjs"
   },
   "keywords": [],
   "author": "",

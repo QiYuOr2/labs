@@ -5,7 +5,7 @@ module.exports = {
     {
       name: "blive-ws-monitor",
       cwd: __dirname,
-      script: path.join(__dirname, "index.mjs"),
+      script: path.join(__dirname, "src/index.mjs"),
       interpreter: "node",
       instances: 1,
       exec_mode: "fork",
