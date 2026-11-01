@@ -383,6 +383,15 @@
     return n;
   }
 
+
+  function failureText(status, text) {
+    var body = String(text || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    if (body.length > 160) {
+      body = body.slice(0, 160);
+    }
+    return body || ("生成失败 " + status);
+  }
+
   function upload() {
     var raw = normalize(input.value);
     if (!isConfig(raw)) {
@@ -404,25 +413,25 @@
       body: raw
     }).then(function (response) {
       return response.text().then(function (text) {
-        return { ok: response.ok, text: text };
+        return { ok: response.ok, status: response.status, text: text };
       });
     }).then(function (response) {
       if (mine !== ticket || client !== current) {
         return;
       }
       if (!response.ok) {
-        warning.textContent = response.text || "生成失败";
+        warning.textContent = failureText(response.status, response.text);
         return;
       }
       var payload;
       try {
         payload = JSON.parse(response.text);
       } catch (error) {
-        warning.textContent = "生成失败";
+        warning.textContent = failureText(response.status, response.text);
         return;
       }
       if (!payload.url) {
-        warning.textContent = "生成失败";
+        warning.textContent = failureText(response.status, "");
         return;
       }
       var id = idFrom(payload.url);
@@ -431,11 +440,12 @@
       }
       warning.textContent = "";
       showLink(payload.url, clients[client].uploaded);
-    }).catch(function () {
+    }).catch(function (error) {
       if (mine !== ticket) {
         return;
       }
-      warning.textContent = "生成失败";
+      var detail = error && error.message ? String(error.message) : "";
+      warning.textContent = detail ? "生成失败 " + detail : "生成失败";
     });
   }
 

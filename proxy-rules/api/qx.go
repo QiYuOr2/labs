@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -978,6 +979,13 @@ func stripInlineComment(line string) string {
 	return strings.TrimSpace(line)
 }
 
+// writeError answers with msg and records the status. Messages are fixed
+// strings; do not pass subscription URLs or node lines.
+func writeError(w http.ResponseWriter, msg string, status int) {
+	log.Printf("qx status=%d msg=%q", status, msg)
+	http.Error(w, msg, status)
+}
+
 const defaultProfileURL = "https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/quantumultx.conf"
 
 // Handler is the Vercel function entry. Quantumult X calls /api/qx?url=...
@@ -986,7 +994,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	switch client {
 	case "qx", "sr", "flclash":
 	default:
-		http.Error(w, "不支持的客户端", http.StatusBadRequest)
+		writeError(w, "不支持的客户端", http.StatusBadRequest)
 		return
 	}
 	if r.Method == http.MethodDelete {
@@ -1006,16 +1014,16 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, "只接受 GET", http.StatusMethodNotAllowed)
+		writeError(w, "只接受 GET", http.StatusMethodNotAllowed)
 		return
 	}
 	raw := r.URL.Query().Get("url")
 	if raw == "" {
-		http.Error(w, "缺少 url", http.StatusBadRequest)
+		writeError(w, "缺少 url", http.StatusBadRequest)
 		return
 	}
 	if err := screenURL(raw); err != nil {
-		http.Error(w, "订阅链接无效", http.StatusBadRequest)
+		writeError(w, "订阅链接无效", http.StatusBadRequest)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 40*time.Second)
@@ -1040,16 +1048,16 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	baseRes := <-baseCh
 	subRes := <-subCh
 	if baseRes.err != nil {
-		http.Error(w, "规则配置下载失败", http.StatusBadGateway)
+		writeError(w, "规则配置下载失败", http.StatusBadGateway)
 		return
 	}
 	if subRes.err != nil {
-		http.Error(w, subRes.err.Error(), http.StatusBadGateway)
+		writeError(w, subRes.err.Error(), http.StatusBadGateway)
 		return
 	}
 	merged, err := MergeQuantumultX(baseRes.body, subRes.body, raw)
 	if err != nil {
-		http.Error(w, "合并失败", http.StatusBadGateway)
+		writeError(w, "合并失败", http.StatusBadGateway)
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -1126,7 +1134,7 @@ func handleDelete(w http.ResponseWriter, r *http.Request, client string) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	path, err := serve.SubPath(client, id)
 	if err != nil {
-		http.Error(w, "链接无效", http.StatusBadRequest)
+		writeError(w, "链接无效", http.StatusBadRequest)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -1136,7 +1144,7 @@ func handleDelete(w http.ResponseWriter, r *http.Request, client string) {
 		if err.Error() == "存储还没配好" {
 			status = http.StatusServiceUnavailable
 		}
-		http.Error(w, err.Error(), status)
+		writeError(w, err.Error(), status)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -1145,38 +1153,38 @@ func handleDelete(w http.ResponseWriter, r *http.Request, client string) {
 func handleUpload(w http.ResponseWriter, r *http.Request, client string) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	if id != "" && !serve.ValidID(id) {
-		http.Error(w, "链接无效", http.StatusBadRequest)
+		writeError(w, "链接无效", http.StatusBadRequest)
 		return
 	}
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		if id == "" {
-			http.Error(w, "链接无效", http.StatusBadRequest)
+			writeError(w, "链接无效", http.StatusBadRequest)
 			return
 		}
 		writeStored(w, r, client, id)
 		return
 	}
 	if r.Method != http.MethodPost {
-		http.Error(w, "只接受 POST", http.StatusMethodNotAllowed)
+		writeError(w, "只接受 POST", http.StatusMethodNotAllowed)
 		return
 	}
 	payload, err := io.ReadAll(io.LimitReader(r.Body, maxUpload+1))
 	if err != nil {
-		http.Error(w, "配置读取失败", http.StatusBadRequest)
+		writeError(w, "配置读取失败", http.StatusBadRequest)
 		return
 	}
 	if len(payload) > maxUpload {
-		http.Error(w, "文件过大", http.StatusRequestEntityTooLarge)
+		writeError(w, "文件过大", http.StatusRequestEntityTooLarge)
 		return
 	}
 	if len(strings.TrimSpace(string(payload))) == 0 {
-		http.Error(w, "缺少配置", http.StatusBadRequest)
+		writeError(w, "缺少配置", http.StatusBadRequest)
 		return
 	}
 	if id == "" {
 		id, err = serve.NewID()
 		if err != nil {
-			http.Error(w, "合并失败", http.StatusBadGateway)
+			writeError(w, "合并失败", http.StatusBadGateway)
 			return
 		}
 	}
@@ -1189,12 +1197,12 @@ func handleUpload(w http.ResponseWriter, r *http.Request, client string) {
 		if err.Error() == "规则配置下载失败" || err.Error() == "合并失败" {
 			status = http.StatusBadGateway
 		}
-		http.Error(w, err.Error(), status)
+		writeError(w, err.Error(), status)
 		return
 	}
 	path, err := serve.SubPath(client, id)
 	if err != nil {
-		http.Error(w, "链接无效", http.StatusBadRequest)
+		writeError(w, "链接无效", http.StatusBadRequest)
 		return
 	}
 	if err := serve.SaveText(ctx, path, merged); err != nil {
@@ -1202,9 +1210,10 @@ func handleUpload(w http.ResponseWriter, r *http.Request, client string) {
 		if err.Error() == "存储还没配好" {
 			status = http.StatusServiceUnavailable
 		}
-		http.Error(w, err.Error(), status)
+		writeError(w, err.Error(), status)
 		return
 	}
+	log.Printf("qx upload client=%s bytes=%d ok", client, len(payload))
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(struct {
@@ -1215,7 +1224,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request, client string) {
 func writeStored(w http.ResponseWriter, r *http.Request, client, id string) {
 	path, err := serve.SubPath(client, id)
 	if err != nil {
-		http.Error(w, "链接无效", http.StatusBadRequest)
+		writeError(w, "链接无效", http.StatusBadRequest)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -1223,10 +1232,10 @@ func writeStored(w http.ResponseWriter, r *http.Request, client, id string) {
 	body, err := serve.LoadTextSaved(ctx, path)
 	if err != nil {
 		if serve.IsNotFound(err) {
-			http.Error(w, "订阅不存在", http.StatusNotFound)
+			writeError(w, "订阅不存在", http.StatusNotFound)
 			return
 		}
-		http.Error(w, "存储失败", http.StatusBadGateway)
+		writeError(w, "存储失败", http.StatusBadGateway)
 		return
 	}
 	w.Header().Set("Content-Type", serve.StoredType(client))
