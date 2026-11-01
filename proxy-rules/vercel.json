@@ -1,5 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/sr", "destination": "/api/qx?client=sr" },
+    { "source": "/api/flclash", "destination": "/api/qx?client=flclash" }
+  ],
   "functions": {
     "api/qx.go": {
       "maxDuration": 60

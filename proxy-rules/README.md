@@ -2,9 +2,9 @@
 
 规则在这个目录里维护。改 `config/all.ini` 或 `rules/` 后直接推送，GitHub Action 用 Go 生成三份配置并提交回同一个分支。不用在本地跑命令。推到 `main` 之后，客户端只填已经生成好的文件链接。没有在线转换，也不会把机场地址发给别人。
 
-一条链接里同时装上机场节点和这些规则做不到。那得有人在你更新时去拉机场。Action 看不到你的订阅，也不该看到。节点用机场原来的订阅，下面的链接只负责策略组和分流。
+仓库里的静态文件只负责策略组和远程分流，不保存机场地址。要把名单展开进同一份配置，用文末的合并服务。
 
-推到 `main` 之前，这些链接是 404：
+推到 `main` 之前，这些静态链接是 404：
 
 - FlClash 覆写脚本：`https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/flclash.js`
 - Quantumult X 配置：`https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/quantumultx.conf`
@@ -21,7 +21,9 @@
 3. 使用规则模式。脚本会把 `mode` 改成 `rule`。
 4. 「🤖 AI」只有手动的日本、台湾、新加坡、美国、全部节点、DIRECT。没有香港，没有自动选择，没有故障转移，也没有「🚀 默认代理」。
 
-脚本留下机场的节点和 `proxy-providers`，换掉策略组和规则。不改端口，也不打开 `allow-lan`。广告、AI、流媒体名单仍是远程文件，客户端大约每天拉一次。
+脚本留下机场的节点和 `proxy-providers`，换掉策略组和规则。不改端口，也不打开 `allow-lan`。
+
+静态 `flclash.js` 里的广告、AI、流媒体名单仍是远程文件。要展开进脚本里，用下面的「FlClash 展开」。
 
 Clash 不能跑 Quantumult X 的重写脚本。去广告靠分流里的 REJECT。
 
@@ -62,10 +64,27 @@ GitHub Actions 不能接这个请求。它只在推送后生成静态文件。�
 
 ## Shadowrocket
 
-1. 首页添加机场订阅。这是节点，不是配置。
-2. 配置从 URL 下载 `shadowrocket.conf`。文件里的 `[Proxy]` 是空的。
-3. 配置里的 `update-url` 就是这条 raw 链接，用来更新规则。更新不会带上机场。如果更新后节点没了，重新添加机场订阅。
-4. 小火箭用不了 Quantumult X 那套重写。广告域名走「🚫 广告拦截」，默认 REJECT。
+静态的 `shadowrocket.conf` 仍使用远程 `RULE-SET`。要一份已经展开的配置，填这个地址，不要填到节点订阅：
+
+`https://proxy-rules.vercel.app/api/sr?url=<编码后的订阅链接>`
+
+不带 `url` 时只展开分流，`[Proxy]` 仍是空的，节点继续在首页添加。
+
+1. 带 `url` 时，如果订阅本身是小火箭配置，会抄其中的 `[Proxy]` 和 `dns-server`。策略组、规则和 `[Host]` 仍用仓库里的。
+2. 订阅不是小火箭节点行时，不猜测协议，`[Proxy]` 保持空白。Clash 或 Base64 节点请仍在首页添加。
+3. 配置里的 `update-url` 会改成上面的地址，所以以后更新仍走这份展开后的配置。
+4. `[Rule]` 里的 `RULE-SET` 会下载并写成 `DOMAIN-SUFFIX`、`IP-CIDR` 这种本地规则，顺序和策略不变。任一名单失败时，这次仍返回原来的远程 `RULE-SET`。
+5. 小火箭用不了 Quantumult X 那套重写。广告域名走「🚫 广告拦截」，默认 REJECT。
+
+## FlClash 展开
+
+静态脚本仍引用远程名单。展开后的覆写脚本是：
+
+`https://proxy-rules.vercel.app/api/flclash`
+
+1. 先导入机场订阅，再把这个地址填进覆写脚本并关联。它只替换策略组、规则和 `mode`，不改节点，也不打开 `allow-lan`。
+2. 名单写进 `config.rules`，`rule-providers` 置空。规则保持 Clash 的 `DOMAIN-SUFFIX` 写法，策略用原来的组名。
+3. 任一名单下载失败时，这次仍返回原来的远程脚本。
 
 ## 策略组
 

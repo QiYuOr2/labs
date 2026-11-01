@@ -16,6 +16,8 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/qx", handler.Handler)
+	mux.HandleFunc("/api/sr", handler.Handler)
+	mux.HandleFunc("/api/flclash", handler.Handler)
 	fmt.Println("listening on :" + port)
 	log.Fatal(http.ListenAndServe(":"+port, mux))
 }

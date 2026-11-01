@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/QiYuOr2/labs/proxy-rules/internal/rules"
+	"github.com/QiYuOr2/labs/proxy-rules/serve"
 )
 
 const baseProfile = `# banner
@@ -383,5 +384,41 @@ func TestExpandRealProfile(t *testing.T) {
 	}
 	if strings.Contains(got, "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/BanAD.list") {
 		t.Fatal("filter remote remained")
+	}
+}
+
+func TestRejectsUnknownClient(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/qx?client=nope", nil)
+	rec := httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status %d", rec.Code)
+	}
+}
+
+func TestDispatchShadowrocketPath(t *testing.T) {
+	orig := serve.FetchText
+	serve.ResetCache()
+	t.Cleanup(func() {
+		serve.FetchText = orig
+		serve.ResetCache()
+	})
+	t.Setenv("RULES_SR_URL", "https://example.com/sr.conf")
+	serve.FetchText = func(_ context.Context, raw string) (string, error) {
+		switch raw {
+		case "https://example.com/sr.conf":
+			return "[General]\nupdate-url = https://example.com/old\n\n[Proxy]\n\n[Proxy Group]\n\n[Rule]\nRULE-SET,https://example.com/one.list,DIRECT\nFINAL,DIRECT\n", nil
+		case "https://example.com/one.list":
+			return "DOMAIN-SUFFIX,one.example\n", nil
+		default:
+			t.Fatalf("unexpected %s", raw)
+			return "", nil
+		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/sr", nil)
+	rec := httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "DOMAIN-SUFFIX,one.example,DIRECT") {
+		t.Fatalf("status %d\n%s", rec.Code, rec.Body.String())
 	}
 }

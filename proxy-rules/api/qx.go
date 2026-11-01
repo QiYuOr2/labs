@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/QiYuOr2/labs/proxy-rules/serve"
 )
 
 const parserURL = "https://raw.githubusercontent.com/KOP-XIAO/QuantumultX/master/Scripts/resource-parser.js"
@@ -955,6 +957,18 @@ const defaultProfileURL = "https://raw.githubusercontent.com/QiYuOr2/labs/main/p
 
 // Handler is the Vercel function entry. Quantumult X calls /api/qx?url=...
 func Handler(w http.ResponseWriter, r *http.Request) {
+	switch clientFrom(r) {
+	case "sr":
+		serve.Shadowrocket(w, r)
+		return
+	case "flclash":
+		serve.FlClash(w, r)
+		return
+	case "qx":
+	default:
+		http.Error(w, "不支持的客户端", http.StatusBadRequest)
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, "只接受 GET", http.StatusMethodNotAllowed)
 		return
@@ -1044,4 +1058,28 @@ func profileURL() string {
 		return value
 	}
 	return defaultProfileURL
+}
+
+func clientFrom(r *http.Request) string {
+	if c := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("client"))); c != "" {
+		switch c {
+		case "sr", "shadowrocket":
+			return "sr"
+		case "flclash", "clash":
+			return "flclash"
+		case "qx", "quantumultx":
+			return "qx"
+		default:
+			return c
+		}
+	}
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	switch {
+	case strings.HasSuffix(path, "/api/sr"):
+		return "sr"
+	case strings.HasSuffix(path, "/api/flclash"):
+		return "flclash"
+	default:
+		return "qx"
+	}
 }
