@@ -1,0 +1,12 @@
+{
+  "name": "@labs/scripts",
+  "version": "1.0.0",
+  "private": true,
+  "bin": {
+    "convert2mp4": "./convert2mp4.cmd"
+  },
+  "type": "module",
+  "dependencies": {
+    "zx": "^7.1.0"
+  }
+}

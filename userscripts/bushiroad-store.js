@@ -9,7 +9,7 @@
 // @grant        none
 // ==/UserScript==
 
-(function() {
+(function () {
   'use strict';
 
   const style = document.createElement('style');
@@ -108,12 +108,12 @@
   const productIdInput = document.getElementById('qy_productId');
   const releaseDateInput = document.getElementById('qy_releaseDate');
 
-  getInfo()
+  getInfo();
 
   const form = document.getElementById('qyForm');
-  const submitButton = document.getElementById('qySubmit')
+  const submitButton = document.getElementById('qySubmit');
 
-  form.addEventListener('submit', e => {
+  form.addEventListener('submit', (e) => {
     e.preventDefault();
     getInfo();
 
@@ -124,7 +124,7 @@
     const sectionId = document.getElementById('qy_sectionId').value.trim();
 
     if (!variantId || !quantity || isNaN(quantity) || quantity < 1) {
-      quantity = 1
+      quantity = 1;
       return;
     }
 
@@ -134,53 +134,48 @@
     formData.append('id', variantId);
     formData.append('quantity', quantity);
 
-    if (releaseDate) 
-      formData.append('properties[_発売日]', releaseDate);
-    if (productId) 
-      formData.append('product-id', productId);
-    if (sectionId) 
-      formData.append('section-id', sectionId);
+    if (releaseDate) formData.append('properties[_発売日]', releaseDate);
+    if (productId) formData.append('product-id', productId);
+    if (sectionId) formData.append('section-id', sectionId);
 
-    submitButton.setAttribute('style', "display: none");
+    submitButton.setAttribute('style', 'display: none');
 
-    const tips = document.createElement('div')
-    tips.classList.add('tips')
-    tips.innerText = '提交中，请稍后...'
+    const tips = document.createElement('div');
+    tips.classList.add('tips');
+    tips.innerText = '提交中，请稍后...';
 
-    form.appendChild(tips)
+    form.appendChild(tips);
 
     fetch('/cart/add', {
       method: 'POST',
       body: formData,
       credentials: 'same-origin',
     })
-    .then(response => {
-      if (response.redirected) {
-        window.location.href = response.url;
-        return null;
-      }
-      return response.text();
-    })
-    .then(data => {
-      if (data) {
-        resultDiv.textContent = '添加成功（无跳转），请查看购物车。';
-      }
-    })
-    .catch(err => {
-      resultDiv.textContent = '请求失败: ' + err.message;
-    });
+      .then((response) => {
+        if (response.redirected) {
+          window.location.href = response.url;
+          return null;
+        }
+        return response.text();
+      })
+      .then((data) => {
+        if (data) {
+          resultDiv.textContent = '添加成功（无跳转），请查看购物车。';
+        }
+      })
+      .catch((err) => {
+        resultDiv.textContent = '请求失败: ' + err.message;
+      });
   });
 
-  document.getElementById('loadInfo').addEventListener('click', getInfo)
+  document.getElementById('loadInfo').addEventListener('click', getInfo);
 
   function getInfo() {
-    if (!variantInput.value)
-      variantInput.value = getVariantIdFromMeta();
+    if (!variantInput.value) variantInput.value = getVariantIdFromMeta();
 
     productIdInput.value = getProductIdFromMeta();
     releaseDateInput.value = getReleaseDateFromPage();
   }
-
 
   function getVariantIdFromMeta() {
     try {

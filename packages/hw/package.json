@@ -1,0 +1,13 @@
+{
+  "name": "@labs/hw",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ZMKX HID experiment",
+  "dependencies": {
+    "node-hid": "^3.0.0",
+    "protobufjs": "^7.3.0"
+  },
+  "devDependencies": {
+    "protobufjs-cli": "^1.1.2"
+  }
+}

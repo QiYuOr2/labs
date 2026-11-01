@@ -1,0 +1,29 @@
+{
+  "name": "@labs/bili-comment-hide",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@unocss/reset": "catalog:",
+    "@vueuse/core": "catalog:",
+    "vue": "catalog:",
+    "xhook": "catalog:"
+  },
+  "devDependencies": {
+    "@types/xhook": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "less": "^4.2.2",
+    "typescript": "catalog:",
+    "unocss": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-monkey": "catalog:",
+    "vite-plus": "catalog:",
+    "vue-tsc": "catalog:"
+  }
+}

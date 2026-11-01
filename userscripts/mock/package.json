@@ -1,0 +1,31 @@
+{
+  "name": "@labs/mock",
+  "version": "1.1.1",
+  "private": true,
+  "description": "接口响应修改",
+  "license": "MIT",
+  "author": "qiyuor2",
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@vueuse/core": "catalog:",
+    "colord": "^2.9.3",
+    "vue": "catalog:",
+    "vue-router": "^4.2.5",
+    "xhook": "catalog:"
+  },
+  "devDependencies": {
+    "@types/xhook": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-monkey": "catalog:",
+    "vite-plus": "catalog:",
+    "vue-tsc": "catalog:"
+  }
+}

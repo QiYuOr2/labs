@@ -1,0 +1,11 @@
+{
+  "name": "@labs/spider",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "haiyuangabiou": "node haiyuangabiou.mjs"
+  },
+  "dependencies": {
+    "cheerio": "1.0.0-rc.12"
+  }
+}
