@@ -275,7 +275,7 @@ func TestRealClientsKeepOrder(t *testing.T) {
 		}
 		last = idx
 	}
-	if !strings.Contains(got, "GEOIP,CN,🎯 全球直连") || !strings.Contains(got, "FINAL,🐟 漏网之鱼") || strings.Contains(got, "https://raw.githubusercontent.com/ACL4SSR/") {
+	if !strings.Contains(got, "GEOIP,CN,全球直连") || !strings.Contains(got, "FINAL,漏网之鱼") || strings.Contains(got, "https://raw.githubusercontent.com/ACL4SSR/") {
 		t.Fatal("sr shape")
 	}
 

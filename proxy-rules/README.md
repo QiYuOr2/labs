@@ -95,7 +95,7 @@ GitHub Actions 不能接这个请求。它只在推送后生成静态文件。�
 
 ## 策略组
 
-FlClash、Mihomo 和 Quantumult X 的策略名不带 emoji，图标用 Qure Color。Quantumult X 把图标写在策略行末尾的 `img-url`。Shadowrocket 没有图标字段，仍用 emoji。导入节点时会去掉名字里的 emoji，地区规则仍按剩下的文字匹配。
+三个客户端的策略名都不带 emoji，图标用 Qure Color。FlClash 和 Mihomo 写在 `icon`，Quantumult X 和 Shadowrocket 写在策略行末尾的 `img-url`。导入节点时会去掉名字里的 emoji，地区规则仍按剩下的文字匹配。
 
 「🤖 AI」只有手动选择：日本、台湾、新加坡、美国、全部节点、DIRECT。没有香港，没有自动选择，没有故障转移，也没有「🚀 默认代理」。默认代理那一组里面带了自动选择和故障转移，AI 流量再跳进去就会换节点。
 

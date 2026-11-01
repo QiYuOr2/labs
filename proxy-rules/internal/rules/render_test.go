@@ -223,23 +223,24 @@ func TestFlClashScript(t *testing.T) {
 		if !strings.HasSuffix(line, ", img-url="+clashIcon(group.Name)) {
 			t.Fatalf("QX icon for %s: %s", group.Name, line)
 		}
-		if strings.Contains(line, group.Name) && group.Name != label {
-			t.Fatalf("QX policy kept emoji name %s", group.Name)
+		srLine := srPolicyLine(sr, label)
+		if !strings.Contains(srLine, ",img-url="+clashIcon(group.Name)) {
+			t.Fatalf("Shadowrocket icon for %s: %s", group.Name, srLine)
+		}
+		if (strings.Contains(line, group.Name) || strings.Contains(srLine, group.Name)) && group.Name != label {
+			t.Fatalf("policy kept emoji name %s", group.Name)
 		}
 	}
-	if emojiIn(qx) {
-		t.Fatal("QX still has emoji")
+	if emojiIn(qx) || emojiIn(sr) {
+		t.Fatal("a client config still has emoji")
 	}
 	if !strings.Contains(qx, "static=下载,") || !strings.Contains(qx, "force-policy=下载") || !strings.Contains(qx, "final, 漏网之鱼") {
 		t.Fatal("QX policy and filter names diverged")
 	}
-	if strings.Contains(sr, "img-url=") {
-		t.Fatal("Shadowrocket has img-url")
+	if !strings.Contains(sr, "默认代理 = select,") || !strings.Contains(sr, "FINAL,漏网之鱼") {
+		t.Fatal("Shadowrocket policy and rule names diverged")
 	}
-	if !strings.Contains(sr, "🚀 默认代理") {
-		t.Fatal("Shadowrocket lost emoji")
-	}
-	assertAILine(t, sr, aiGroupName+" = select,")
+	assertAILine(t, sr, clashName(aiGroupName)+" = select,")
 	if strings.Contains(qx, "url-latency-benchmark="+clashName(aiGroupName)) {
 		t.Fatal("QX AI is a benchmark group")
 	}
@@ -263,6 +264,16 @@ func TestFlClashScript(t *testing.T) {
 	if !strings.Contains(sr, "RULE-SET,") || !strings.Contains(sr, "GEOIP,CN,") || !strings.Contains(sr, "\n[Proxy]\n\n[Proxy Group]\n") {
 		t.Fatal("Shadowrocket shape")
 	}
+}
+
+func srPolicyLine(text, name string) string {
+	prefix := name + " = "
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(line, prefix) {
+			return line
+		}
+	}
+	return ""
 }
 
 func qxPolicyLine(text, name string) string {

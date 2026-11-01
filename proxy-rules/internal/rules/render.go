@@ -447,11 +447,11 @@ func renderShadowrocket(cfg Config) string {
 	for _, rule := range cfg.Rules {
 		switch rule.Kind {
 		case "url":
-			fmt.Fprintf(&b, "RULE-SET,%s,%s\n", rule.URL, rule.Group)
+			fmt.Fprintf(&b, "RULE-SET,%s,%s\n", rule.URL, clashName(rule.Group))
 		case "geoip":
-			fmt.Fprintf(&b, "GEOIP,%s,%s\n", rule.Param, rule.Group)
+			fmt.Fprintf(&b, "GEOIP,%s,%s\n", rule.Param, clashName(rule.Group))
 		case "final":
-			fmt.Fprintf(&b, "FINAL,%s\n", rule.Group)
+			fmt.Fprintf(&b, "FINAL,%s\n", clashName(rule.Group))
 		}
 	}
 	b.WriteString("\n[Host]\n")
@@ -459,22 +459,31 @@ func renderShadowrocket(cfg Config) string {
 }
 
 func srPolicy(group Group) string {
+	name := clashName(group.Name)
+	var line string
 	if len(group.Proxies) > 0 {
 		parts := make([]string, 0, len(group.Proxies)+1)
 		parts = append(parts, group.Type)
-		parts = append(parts, group.Proxies...)
-		return group.Name + " = " + strings.Join(parts, ",")
+		for _, member := range group.Proxies {
+			parts = append(parts, clashName(member))
+		}
+		line = name + " = " + strings.Join(parts, ",")
+	} else {
+		// Shadowrocket's policy filter also rejects lookahead and then matches nothing.
+		regex := plainTagRegex(group.Regex)
+		switch group.Type {
+		case "url-test":
+			line = fmt.Sprintf("%s = url-test,policy-regex-filter=%s,url=%s,interval=%d,tolerance=%d,timeout=5", name, regex, group.TestURL, group.Interval, group.Tolerance)
+		case "fallback":
+			line = fmt.Sprintf("%s = fallback,policy-regex-filter=%s,url=%s,interval=%d,timeout=5", name, regex, group.TestURL, group.Interval)
+		default:
+			line = fmt.Sprintf("%s = select,policy-regex-filter=%s", name, regex)
+		}
 	}
-	// Shadowrocket's policy filter also rejects lookahead and then matches nothing.
-	regex := plainTagRegex(group.Regex)
-	switch group.Type {
-	case "url-test":
-		return fmt.Sprintf("%s = url-test,policy-regex-filter=%s,url=%s,interval=%d,tolerance=%d,timeout=5", group.Name, regex, group.TestURL, group.Interval, group.Tolerance)
-	case "fallback":
-		return fmt.Sprintf("%s = fallback,policy-regex-filter=%s,url=%s,interval=%d,timeout=5", group.Name, regex, group.TestURL, group.Interval)
-	default:
-		return fmt.Sprintf("%s = select,policy-regex-filter=%s", group.Name, regex)
+	if icon := clashIcon(group.Name); icon != "" {
+		line += ",img-url=" + icon
 	}
+	return line
 }
 
 func plainTagRegex(match string) string {

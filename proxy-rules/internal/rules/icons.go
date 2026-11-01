@@ -10,9 +10,8 @@ import (
 const qureColor = "https://fastly.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/"
 
 // clashIcons maps the source group name to an icon URL.
-// FlClash reads proxy-groups.icon. Quantumult X appends the same URL as img-url.
-// Both clients drop the emoji from the label. Shadowrocket has no icon field,
-// so it keeps the emoji name.
+// FlClash reads proxy-groups.icon. Quantumult X and Shadowrocket append the same
+// URL as img-url. All three clients drop the emoji from the policy name.
 var clashIcons = map[string]string{
 	"🚀 默认代理":        qure("Proxy.png"),
 	"🤖 AI":          qure("AI.png"),
@@ -81,8 +80,7 @@ func clashIcon(name string) string {
 	return clashIcons[name]
 }
 
-// clashName drops a leading emoji. FlClash and Quantumult X use it.
-// Shadowrocket keeps the source name.
+// clashName drops a leading emoji from a policy label.
 func clashName(name string) string {
 	if name == "DIRECT" || name == "REJECT" {
 		return name
