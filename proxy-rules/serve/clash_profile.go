@@ -349,6 +349,12 @@ func writeComplex(b *strings.Builder, value any, indent int) {
 	switch item := value.(type) {
 	case map[string]any:
 		writeMap(b, item, indent)
+	case map[string]string:
+		mapped := make(map[string]any, len(item))
+		for key, value := range item {
+			mapped[key] = value
+		}
+		writeMap(b, mapped, indent)
 	case []map[string]any:
 		writeMapList(b, item, indent)
 	case []string:
@@ -382,7 +388,7 @@ func writeComplex(b *strings.Builder, value any, indent int) {
 
 func complexValue(value any) bool {
 	switch value.(type) {
-	case map[string]any, []map[string]any, []string, []any:
+	case map[string]any, map[string]string, []map[string]any, []string, []any:
 		return true
 	default:
 		return false

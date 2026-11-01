@@ -285,3 +285,78 @@ func TestQuantumultXKeepsSubscriptionDNS(t *testing.T) {
 		t.Fatalf("kept unsafe dns %#v", dns)
 	}
 }
+
+func TestClashNameserverPolicyIsMapping(t *testing.T) {
+	resetFetch(t)
+	t.Setenv("RULES_FLCLASH_URL", "https://example.com/flclash.js")
+	FetchText = func(_ context.Context, raw string) (string, error) {
+		switch raw {
+		case "https://example.com/flclash.js":
+			return `function main(config) {
+  var spec = {"groups":[{"name":"漏网之鱼","type":"select","proxies":["DIRECT"]}],"rules":[{"kind":"final","group":"漏网之鱼"}]};
+  return config;
+}
+`, nil
+		default:
+			t.Fatalf("unexpected %s", raw)
+			return "", nil
+		}
+	}
+	body := "[dns]\nserver=/*.example.com/1.1.1.1\n[server_local]\nshadowsocks=example.com:443, method=aes-128-gcm, password=secret, tag=日本\n"
+	got, err := BuildClash(t.Context(), body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "map[") {
+		t.Fatalf("nameserver-policy was written as text\n%s", dnsSection(got))
+	}
+	var root yaml.Node
+	if err := yaml.Unmarshal([]byte(got), &root); err != nil {
+		t.Fatal(err)
+	}
+	policy := findMapping(root.Content[0], "dns", "nameserver-policy")
+	if policy == nil || policy.Kind != yaml.MappingNode {
+		kind := 0
+		if policy != nil {
+			kind = int(policy.Kind)
+		}
+		t.Fatalf("pipeline must contain YAML mapping, has %d\n%s", kind, dnsSection(got))
+	}
+	var decoded map[string]string
+	if err := policy.Decode(&decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded["example.com"] != "1.1.1.1" {
+		t.Fatalf("policy %#v", decoded)
+	}
+}
+
+func dnsSection(body string) string {
+	start := strings.Index(body, "dns:\n")
+	if start < 0 {
+		return body
+	}
+	rest := body[start:]
+	if end := strings.Index(rest, "\nproxies:"); end >= 0 {
+		return rest[:end]
+	}
+	return rest
+}
+
+func findMapping(node *yaml.Node, keys ...string) *yaml.Node {
+	current := node
+	for _, key := range keys {
+		if current == nil || current.Kind != yaml.MappingNode {
+			return nil
+		}
+		var next *yaml.Node
+		for i := 0; i+1 < len(current.Content); i += 2 {
+			if current.Content[i].Value == key {
+				next = current.Content[i+1]
+				break
+			}
+		}
+		current = next
+	}
+	return current
+}
