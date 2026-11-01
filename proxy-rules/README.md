@@ -42,6 +42,8 @@ Clash 不能跑 Quantumult X 的重写脚本。去广告靠分流里的 REJECT�
 
 GitHub Actions 不能接这个请求。它只在推送后生成静态文件。订阅链接要作为参数传进来，并且要现拉现合并，所以这部分部署到 Vercel。
 
+不想手写编码时，打开 `https://proxy-rules.vercel.app/`。贴上机场订阅，页面给出可用链接和二维码。编码在浏览器里完成，这个页面不会收到订阅。
+
 1. Vercel 项目 `proxy-rules` 连接这个仓库，Root Directory 是 `proxy-rules`。不要用仓库根目录，`go.mod` 在这一层。
 2. Framework Preset 是 Other。入口是 `api/qx.go`，路由是 `/api/qx`。不要选 Go Server，这里没有 `main.go` 或 `cmd/server/main.go`。
 3. 部署完成后，在 Quantumult X 里把下面的地址作为完整配置下载，不要加到节点订阅：

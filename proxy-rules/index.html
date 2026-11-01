@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>订阅链接</title>
+  <style>
+    :root {
+      --paper: #efe4d2;
+      --card: #f7f1e5;
+      --ink: #1c1712;
+      --muted: #6f6256;
+      --line: #d9c7ae;
+      --stamp: #b43324;
+      --stamp-ink: #fff8f2;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Iowan Old Style", Palatino, "Palatino Linotype", "Songti SC", "Noto Serif SC", serif;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(255, 250, 242, 0.9), transparent 34%),
+        linear-gradient(165deg, #e7d8c0 0%, var(--paper) 42%, #e6d5bb 100%);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: linear-gradient(rgba(28, 23, 18, 0.035) 1px, transparent 1px);
+      background-size: 100% 28px;
+    }
+    main {
+      position: relative;
+      width: min(760px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 48px 0 72px;
+    }
+    .kicker {
+      margin: 0 0 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: var(--stamp);
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(40px, 7vw, 68px);
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      line-height: 0.92;
+    }
+    .lede {
+      max-width: 38em;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.5;
+    }
+    form, .result {
+      margin-top: 28px;
+      padding: 22px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      box-shadow: 8px 8px 0 rgba(28, 23, 18, 0.08);
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    textarea {
+      width: 100%;
+      min-height: 96px;
+      resize: vertical;
+      padding: 14px;
+      border: 1px solid var(--ink);
+      background: #fffdf8;
+      color: var(--ink);
+      font: 15px/1.45 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    }
+    textarea:focus {
+      outline: 3px solid rgba(180, 51, 36, 0.28);
+    }
+    .clients {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .clients button, #copy {
+      border: 1px solid var(--ink);
+      background: transparent;
+      color: var(--ink);
+      font: 600 15px/1 "Iowan Old Style", Palatino, "Songti SC", serif;
+      padding: 12px 10px;
+      cursor: pointer;
+    }
+    .clients button[aria-pressed="true"] {
+      background: var(--ink);
+      color: var(--stamp-ink);
+    }
+    #warning {
+      min-height: 1.4em;
+      margin: 10px 0 0;
+      color: var(--stamp);
+      font-size: 15px;
+    }
+    .result { display: grid; gap: 16px; }
+    .result[hidden] { display: none; }
+    #hint { margin: 0; font-size: 17px; line-height: 1.45; }
+    .linkrow {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: start;
+    }
+    #link {
+      display: block;
+      margin: 0;
+      padding: 12px;
+      overflow-wrap: anywhere;
+      background: #fffdf8;
+      border: 1px dashed var(--line);
+      font: 13px/1.45 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    }
+    #qr {
+      display: grid;
+      justify-items: center;
+      padding: 12px;
+      background:
+        linear-gradient(var(--stamp), var(--stamp)) 0 0 / 18px 3px no-repeat,
+        linear-gradient(var(--stamp), var(--stamp)) 0 0 / 3px 18px no-repeat,
+        #fffdf8;
+    }
+    #qr svg { width: min(280px, 100%); height: auto; }
+    .qr-miss { margin: 12px 0; color: var(--muted); }
+    @media (max-width: 640px) {
+      main { width: min(760px, calc(100% - 20px)); padding-top: 28px; }
+      .clients, .linkrow { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="kicker">Labs · proxy rules</p>
+    <h1>贴上订阅，拿走能用的链接。</h1>
+    <p class="lede">编码和二维码都在这台设备上完成。页面不保存、不上传机场地址。只有你之后打开生成的链接时，合并服务才会去拉订阅。</p>
+    <form>
+      <label for="subscription">机场订阅</label>
+      <textarea id="subscription" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="https://"></textarea>
+      <div class="clients" role="group" aria-label="客户端">
+        <button type="button" data-client="qx" aria-pressed="true">Quantumult X</button>
+        <button type="button" data-client="sr" aria-pressed="false">Shadowrocket</button>
+        <button type="button" data-client="flclash" aria-pressed="false">FlClash</button>
+      </div>
+      <p id="warning"></p>
+    </form>
+    <section id="result" class="result" hidden>
+      <p id="hint"></p>
+      <div class="linkrow">
+        <code id="link"></code>
+        <button type="button" id="copy">复制</button>
+      </div>
+      <div id="qr"></div>
+    </section>
+  </main>
+  <script src="assets/qrcode.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
