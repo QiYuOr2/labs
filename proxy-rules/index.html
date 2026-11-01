@@ -5,156 +5,66 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>订阅链接</title>
   <style>
-    :root {
-      --paper: #efe4d2;
-      --card: #f7f1e5;
-      --ink: #1c1712;
-      --muted: #6f6256;
-      --line: #d9c7ae;
-      --stamp: #b43324;
-      --stamp-ink: #fff8f2;
-    }
     * { box-sizing: border-box; }
-    html, body { margin: 0; }
     body {
-      min-height: 100vh;
-      color: var(--ink);
-      font-family: "Iowan Old Style", Palatino, "Palatino Linotype", "Songti SC", "Noto Serif SC", serif;
-      background:
-        radial-gradient(circle at 8% 0%, rgba(255, 250, 242, 0.9), transparent 34%),
-        linear-gradient(165deg, #e7d8c0 0%, var(--paper) 42%, #e6d5bb 100%);
-    }
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background-image: linear-gradient(rgba(28, 23, 18, 0.035) 1px, transparent 1px);
-      background-size: 100% 28px;
+      margin: 0;
+      color: #1c1c1c;
+      background: #fff;
+      font: 16px/1.4 "Songti SC", "Noto Serif SC", Palatino, serif;
     }
     main {
-      position: relative;
-      width: min(760px, calc(100% - 32px));
+      width: min(640px, calc(100% - 32px));
       margin: 0 auto;
-      padding: 48px 0 72px;
+      padding: 32px 0 48px;
     }
-    .kicker {
-      margin: 0 0 12px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
-      font-size: 12px;
-      color: var(--stamp);
-    }
-    h1 {
-      margin: 0;
-      font-size: clamp(40px, 7vw, 68px);
-      font-weight: 600;
-      letter-spacing: -0.04em;
-      line-height: 0.92;
-    }
-    .lede {
-      max-width: 38em;
-      margin: 18px 0 0;
-      color: var(--muted);
-      font-size: 18px;
-      line-height: 1.5;
-    }
-    form, .result {
-      margin-top: 28px;
-      padding: 22px;
-      background: var(--card);
-      border: 1px solid var(--line);
-      box-shadow: 8px 8px 0 rgba(28, 23, 18, 0.08);
-    }
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
-      font-size: 12px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
+    h1 { margin: 0 0 16px; font-size: 22px; font-weight: 600; }
     textarea {
       width: 100%;
-      min-height: 96px;
-      resize: vertical;
-      padding: 14px;
-      border: 1px solid var(--ink);
-      background: #fffdf8;
-      color: var(--ink);
-      font: 15px/1.45 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
-    }
-    textarea:focus {
-      outline: 3px solid rgba(180, 51, 36, 0.28);
+      min-height: 88px;
+      padding: 10px;
+      border: 1px solid #1c1c1c;
+      font: 14px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     }
     .clients {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      display: flex;
       gap: 8px;
-      margin-top: 14px;
+      margin-top: 12px;
     }
-    .clients button, #copy {
-      border: 1px solid var(--ink);
-      background: transparent;
-      color: var(--ink);
-      font: 600 15px/1 "Iowan Old Style", Palatino, "Songti SC", serif;
-      padding: 12px 10px;
+    button {
+      border: 1px solid #1c1c1c;
+      background: #fff;
+      color: #1c1c1c;
+      font: inherit;
+      padding: 8px 12px;
       cursor: pointer;
     }
-    .clients button[aria-pressed="true"] {
-      background: var(--ink);
-      color: var(--stamp-ink);
-    }
-    #warning {
-      min-height: 1.4em;
-      margin: 10px 0 0;
-      color: var(--stamp);
-      font-size: 15px;
-    }
-    .result { display: grid; gap: 16px; }
-    .result[hidden] { display: none; }
-    #hint { margin: 0; font-size: 17px; line-height: 1.45; }
-    .linkrow {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-      align-items: start;
-    }
+    .clients button[aria-pressed="true"] { background: #1c1c1c; color: #fff; }
+    #warning { min-height: 1.2em; margin: 8px 0 0; color: #9d2c2c; }
+    #result { margin-top: 20px; }
+    #result[hidden] { display: none; }
+    #hint { margin: 0 0 12px; }
+    .linkrow { display: flex; gap: 8px; align-items: flex-start; }
     #link {
-      display: block;
+      flex: 1;
       margin: 0;
-      padding: 12px;
+      padding: 10px;
       overflow-wrap: anywhere;
-      background: #fffdf8;
-      border: 1px dashed var(--line);
-      font: 13px/1.45 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+      border: 1px solid #ccc;
+      font: 13px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     }
-    #qr {
-      display: grid;
-      justify-items: center;
-      padding: 12px;
-      background:
-        linear-gradient(var(--stamp), var(--stamp)) 0 0 / 18px 3px no-repeat,
-        linear-gradient(var(--stamp), var(--stamp)) 0 0 / 3px 18px no-repeat,
-        #fffdf8;
-    }
-    #qr svg { width: min(280px, 100%); height: auto; }
-    .qr-miss { margin: 12px 0; color: var(--muted); }
+    #qr { margin-top: 16px; }
+    #qr svg { width: 220px; height: auto; }
+    .qr-miss { margin: 0; color: #555; }
     @media (max-width: 640px) {
-      main { width: min(760px, calc(100% - 20px)); padding-top: 28px; }
-      .clients, .linkrow { grid-template-columns: 1fr; }
+      .clients, .linkrow { flex-direction: column; }
     }
   </style>
 </head>
 <body>
   <main>
-    <p class="kicker">Labs · proxy rules</p>
-    <h1>贴上订阅，拿走能用的链接。</h1>
-    <p class="lede">编码和二维码都在这台设备上完成。页面不保存、不上传机场地址。只有你之后打开生成的链接时，合并服务才会去拉订阅。</p>
+    <h1>订阅链接</h1>
     <form>
-      <label for="subscription">机场订阅</label>
-      <textarea id="subscription" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="https://"></textarea>
+      <textarea id="subscription" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="机场订阅"></textarea>
       <div class="clients" role="group" aria-label="客户端">
         <button type="button" data-client="qx" aria-pressed="true">Quantumult X</button>
         <button type="button" data-client="sr" aria-pressed="false">Shadowrocket</button>
@@ -162,7 +72,7 @@
       </div>
       <p id="warning"></p>
     </form>
-    <section id="result" class="result" hidden>
+    <section id="result" hidden>
       <p id="hint"></p>
       <div class="linkrow">
         <code id="link"></code>
