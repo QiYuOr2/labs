@@ -524,7 +524,7 @@ func GetText(ctx context.Context, raw string) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("订阅下载失败")
+		return "", fmt.Errorf("订阅下载失败 %d", resp.StatusCode)
 	}
 	payload, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
