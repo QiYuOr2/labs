@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -196,10 +197,10 @@ func TestFlClashScript(t *testing.T) {
 	if strings.Contains(qx, "url-latency-benchmark="+aiGroupName) {
 		t.Fatal("QX AI is a benchmark group")
 	}
-	if !strings.Contains(qx, "server-tag-regex=(港|HK|hk|Hong Kong|HongKong|hongkong)") || strings.Contains(qx, "(?!") {
+	if !strings.Contains(qx, "server-tag-regex=.*(港|HK|hk|Hong Kong|HongKong|hongkong).*") || strings.Contains(qx, "(?!") {
 		t.Fatal("QX region filter missing or uses unsupported lookahead")
 	}
-	if !strings.Contains(sr, "policy-regex-filter=(日本|川日|东京|大阪|泉日|埼玉|沪日|深日|JP|Japan)") || strings.Contains(sr, "(?!") {
+	if !strings.Contains(sr, "policy-regex-filter=.*(日本|川日|东京|大阪|泉日|埼玉|沪日|深日|JP|Japan).*") || strings.Contains(sr, "(?!") {
 		t.Fatal("Shadowrocket region filter missing or uses unsupported lookahead")
 	}
 	if !strings.Contains(qx, "[server_remote]\n\n[server_local]") {
@@ -287,4 +288,37 @@ process.stdout.write(JSON.stringify(sandbox.main(input)));
 		t.Fatalf("decode: %v\n%s", err, out)
 	}
 	return got
+}
+
+func TestPlainTagRegexMatchesWholeServerName(t *testing.T) {
+	japan := plainTagRegex("(日本|川日|东京|大阪|泉日|埼玉|沪日|深日|JP|Japan)")
+	hongKong := plainTagRegex("(港|HK|hk|Hong Kong|HongKong|hongkong)")
+	taiwan := plainTagRegex("(台|新北|彰化|TW|Taiwan)")
+	singapore := plainTagRegex("(新加坡|坡|狮城|SG|Singapore)")
+	unitedStates := plainTagRegex("(美|波特兰|达拉斯|俄勒冈|凤凰城|费利蒙|硅谷|拉斯维加斯|洛杉矶|圣何塞|圣克拉拉|西雅图|芝加哥|US|United States)")
+	all := plainTagRegex(".*")
+	cases := []struct {
+		pattern string
+		tag     string
+		want    bool
+	}{
+		{japan, "🇯🇵 Japan | 01", true},
+		{japan, "日本 01", true},
+		{japan, "🇰🇷 Korea | 01", false},
+		{hongKong, "🇭🇰 Hong Kong | 01", true},
+		{taiwan, "🇨🇳 Taiwan | 01", true},
+		{singapore, "🇸🇬 Singapore | 01", true},
+		{unitedStates, "🇺🇸 United States | 01", true},
+		{unitedStates, "🇦🇺 Australia | 01", false},
+		{all, "🇧🇷 Brazil | 01", true},
+	}
+	for _, item := range cases {
+		re, err := regexp.Compile("^(?:" + item.pattern + ")$")
+		if err != nil {
+			t.Fatalf("compile %s: %v", item.pattern, err)
+		}
+		if got := re.MatchString(item.tag); got != item.want {
+			t.Fatalf("pattern %s tag %q = %v, want %v", item.pattern, item.tag, got, item.want)
+		}
+	}
 }

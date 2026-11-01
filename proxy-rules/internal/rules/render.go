@@ -312,8 +312,8 @@ func qxPolicy(group Group) string {
 		}
 		return fmt.Sprintf("%s=%s, %s", qxKind(group.Type), group.Name, strings.Join(members, ", "))
 	}
-	// Quantumult X rejects lookahead. An invalid server-tag-regex matches
-	// nothing, so the group cannot expand and traffic falls through to DIRECT.
+	// Quantumult X rejects lookahead, and an invalid filter matches nothing.
+	// The pattern also has to cover the whole tag, or names like "Japan | 01" miss the group.
 	regex := plainTagRegex(group.Regex)
 	switch group.Type {
 	case "url-test":
@@ -397,10 +397,16 @@ func srPolicy(group Group) string {
 }
 
 func plainTagRegex(match string) string {
-	if match == "" {
+	// These filters are applied to the entire server tag. A bare alternation
+	// only matches a tag that is exactly "Japan" or "日本", so names such as
+	// "🇯🇵 Japan | 01" stay out of the group and Quantumult X falls through to DIRECT.
+	if match == "" || match == ".*" {
 		return ".*"
 	}
-	return match
+	if strings.HasPrefix(match, ".*") && strings.HasSuffix(match, ".*") {
+		return match
+	}
+	return ".*" + match + ".*"
 }
 
 func writeBanner(b *strings.Builder, name string) {
