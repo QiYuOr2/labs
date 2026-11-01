@@ -13,8 +13,8 @@ func TestCheckRepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Groups != 56 || got.Rulesets != 54 {
-		t.Fatalf("summary = %+v, want 56 groups and 54 rulesets", got)
+	if got.Groups != 56 || got.Rulesets != 55 {
+		t.Fatalf("summary = %+v, want 56 groups and 55 rulesets", got)
 	}
 }
 
