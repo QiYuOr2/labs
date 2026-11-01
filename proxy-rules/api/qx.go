@@ -513,27 +513,41 @@ func GetText(ctx context.Context, raw string) (string, error) {
 			return screenURL(req.URL.String())
 		},
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
-	if err != nil {
-		return "", fmt.Errorf("订阅链接无效")
+	var lastStatus int
+	for _, agent := range []string{
+		"Quantumult X",
+		"Mozilla/5.0",
+		"ClashMetaForAndroid/2.11.0",
+	} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
+		if err != nil {
+			return "", fmt.Errorf("订阅链接无效")
+		}
+		req.Header.Set("User-Agent", agent)
+		req.Header.Set("Accept", "*/*")
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		payload, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK && err == nil {
+			if len(payload) > maxBody {
+				return "", fmt.Errorf("订阅内容过大")
+			}
+			return string(payload), nil
+		}
+		if resp.StatusCode != 0 {
+			lastStatus = resp.StatusCode
+		}
+		if resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusServiceUnavailable {
+			break
+		}
 	}
-	req.Header.Set("User-Agent", "labs-proxy-rules")
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("订阅下载失败")
+	if lastStatus != 0 {
+		return "", fmt.Errorf("订阅下载失败 %d", lastStatus)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("订阅下载失败 %d", resp.StatusCode)
-	}
-	payload, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
-	if err != nil {
-		return "", fmt.Errorf("订阅下载失败")
-	}
-	if len(payload) > maxBody {
-		return "", fmt.Errorf("订阅内容过大")
-	}
-	return string(payload), nil
+	return "", fmt.Errorf("订阅下载失败")
 }
 
 var fetchText = GetText
