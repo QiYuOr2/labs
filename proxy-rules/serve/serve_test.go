@@ -109,6 +109,7 @@ func TestShadowrocketMergesProxyAndDNS(t *testing.T) {
 	for _, want := range []string{
 		"DOMAIN-SUFFIX,one.example,🎯 全球直连",
 		"日本 = ss, example.com, 443, encrypt-method=aes-128-gcm, password=secret",
+		"[Proxy Group]\n🤖 AI = select,DIRECT",
 		"dns-server = 223.5.5.5",
 		"update-url = https://proxy-rules.vercel.app/api/sr?url=https%3A%2F%2Fexample.com%2Fairport",
 		"[Host]",

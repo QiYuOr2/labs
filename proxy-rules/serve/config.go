@@ -51,10 +51,17 @@ func isHeader(line string) bool {
 	if len(line) < 3 || line[0] != '[' || line[len(line)-1] != ']' {
 		return false
 	}
-	for _, r := range line[1 : len(line)-1] {
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '-' {
-			return false
+	// [Proxy Group] is a section. A space must not make the next header
+	// invisible, or replacing [Proxy] deletes the groups.
+	name := line[1 : len(line)-1]
+	if name == "" || strings.TrimSpace(name) != name {
+		return false
+	}
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-' || r == ' ' {
+			continue
 		}
+		return false
 	}
 	return true
 }
