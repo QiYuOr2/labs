@@ -24,9 +24,19 @@
     }
   };
 
+  var composer = document.querySelector("#composer");
   var input = document.querySelector("#subscription");
+  var sheet = document.querySelector("#sheet");
+  var meta = document.querySelector("#meta");
+  var preview = document.querySelector("#preview");
+  var edit = document.querySelector("#edit");
+  var clearBtn = document.querySelector("#clear");
+  var toggle = document.querySelector("#toggle");
   var file = document.querySelector("#file");
   var make = document.querySelector("#make");
+  var fileName = "";
+  var editing = false;
+  var expanded = false;
   var warning = document.querySelector("#warning");
   var result = document.querySelector("#result");
   var hint = document.querySelector("#hint");
@@ -63,19 +73,42 @@
   });
   file.addEventListener("change", function () {
     var picked = file.files && file.files[0];
-    if (!picked) {
-      return;
+    if (picked) {
+      readFile(picked);
     }
-    if (picked.size > 2 * 1024 * 1024) {
-      warning.textContent = "文件过大";
-      return;
+  });
+  composer.addEventListener("dragover", function (event) {
+    event.preventDefault();
+  });
+  composer.addEventListener("drop", function (event) {
+    event.preventDefault();
+    var picked = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+    if (picked) {
+      readFile(picked);
     }
-    var reader = new FileReader();
-    reader.onload = function () {
-      input.value = String(reader.result || "");
-      render(true);
-    };
-    reader.readAsText(picked);
+  });
+  edit.addEventListener("click", function () {
+    editing = !editing;
+    edit.textContent = editing ? "完成" : "编辑";
+    input.classList.toggle("editing", editing);
+    render(false);
+    if (editing) {
+      input.focus();
+    }
+  });
+  clearBtn.addEventListener("click", function () {
+    input.value = "";
+    file.value = "";
+    fileName = "";
+    editing = false;
+    expanded = false;
+    edit.textContent = "编辑";
+    input.classList.remove("editing");
+    render(false);
+  });
+  toggle.addEventListener("click", function () {
+    expanded = !expanded;
+    render(false);
   });
   copy.addEventListener("click", function () {
     var value = link.textContent;
@@ -115,6 +148,7 @@
     });
     var client = clients[current];
     var raw = normalize(input.value);
+    var info = paintSheet(raw);
     var config = isConfig(raw);
     make.hidden = !config;
     if (!config) {
@@ -131,12 +165,169 @@
       showLink(buildLink(current, raw), client.hint);
       return;
     }
+    if (info.nodes === 0 && !send) {
+      warning.textContent = info.kind ? "没有认出节点" : "没认出是哪种配置";
+      hideResult();
+      return;
+    }
     if (send) {
       upload();
       return;
     }
     warning.textContent = "";
     hideResult();
+  }
+
+  function readFile(picked) {
+    if (picked.size > 2 * 1024 * 1024) {
+      warning.textContent = "文件过大";
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      fileName = picked.name || "";
+      editing = false;
+      expanded = false;
+      edit.textContent = "编辑";
+      input.classList.remove("editing");
+      input.value = String(reader.result || "");
+      render(true);
+    };
+    reader.readAsText(picked);
+  }
+
+  function paintSheet(raw) {
+    var lines = raw ? raw.split(/\r?\n/) : [];
+    var info = describe(raw, lines.length);
+    var long = lines.length >= 12 || raw.length > 700;
+    var show = long && !editing;
+    sheet.hidden = !show;
+    input.hidden = show;
+    if (!show) {
+      return info;
+    }
+    meta.textContent = info.label;
+    toggle.hidden = lines.length <= 160;
+    toggle.textContent = expanded ? "收起" : "展开";
+    preview.classList.toggle("open", expanded || lines.length <= 160);
+    preview.replaceChildren();
+    var gapAt = -1;
+    var view = lines;
+    if (!expanded && lines.length > 220) {
+      view = lines.slice(0, 90).concat(lines.slice(-40));
+      gapAt = 90;
+    }
+    view.forEach(function (line, index) {
+      if (index === gapAt) {
+        var gap = document.createElement("div");
+        gap.className = "gap";
+        gap.textContent = "省略 " + (lines.length - 130) + " 行";
+        preview.appendChild(gap);
+      }
+      var row = document.createElement("div");
+      row.className = "prow";
+      var ln = document.createElement("span");
+      ln.className = "ln";
+      ln.textContent = String(gapAt >= 0 && index >= gapAt ? lines.length - 40 + (index - gapAt) + 1 : index + 1);
+      var code = document.createElement("span");
+      code.className = "code";
+      code.textContent = line;
+      row.appendChild(ln);
+      row.appendChild(code);
+      preview.appendChild(row);
+    });
+    return info;
+  }
+
+  function describe(raw, count) {
+    var kind = detect(raw);
+    var nodes = kind ? countNodes(raw, kind) : 0;
+    var parts = [];
+    if (fileName) {
+      parts.push(fileName);
+    }
+    parts.push(kind ? "识别为 " + kind : "未识别");
+    if (kind) {
+      parts.push(nodes + " 个节点");
+    }
+    if (count) {
+      parts.push(count + " 行");
+    }
+    return { label: parts.join(" · "), kind: kind, nodes: nodes };
+  }
+
+  function detect(raw) {
+    if (/\[server_local\]/i.test(raw) || /\[server_remote\]/i.test(raw)) {
+      return "Quantumult X";
+    }
+    if (/\[proxy\]/i.test(raw) || /\[proxy group\]/i.test(raw)) {
+      return "Shadowrocket";
+    }
+    if (/(^|\n)proxies:/.test(raw) || /(^|\n)proxy-providers:/.test(raw) || /(^|\n)proxy-groups:/.test(raw)) {
+      return "Clash";
+    }
+    if (/^(ss|ssr|vmess|vless|trojan|hysteria2|hy2):\/\//m.test(raw)) {
+      return "节点链接";
+    }
+    return "";
+  }
+
+  function countNodes(raw, kind) {
+    var lines = raw.split(/\r?\n/);
+    var n = 0;
+    var qxType = /^(shadowsocks|shadowsocksr|vmess|vless|trojan|https|http|socks5-tls|socks5|hysteria2|hysteria)\s*=/i;
+    if (kind === "Quantumult X") {
+      var inLocal = false;
+      lines.forEach(function (line) {
+        var s = line.trim();
+        if (/^\[server_local\]$/i.test(s)) {
+          inLocal = true;
+          return;
+        }
+        if (/^\[[^\]]+\]$/.test(s)) {
+          inLocal = false;
+          return;
+        }
+        if (inLocal && qxType.test(s) && s.toLowerCase().indexOf("passphrase") < 0 && s.toLowerCase().indexOf("p12") < 0) {
+          n += 1;
+        }
+      });
+      return n;
+    }
+    if (kind === "Shadowrocket") {
+      var inProxy = false;
+      lines.forEach(function (line) {
+        var s = line.trim();
+        if (/^\[proxy\]$/i.test(s)) {
+          inProxy = true;
+          return;
+        }
+        if (/^\[[^\]]+\]$/.test(s)) {
+          inProxy = false;
+          return;
+        }
+        if (inProxy && /=\s*(ss|ssr|vmess|vless|trojan|http|https|socks5|socks5-tls|hysteria2|hysteria|hy2|tuic)\s*,/i.test(s)) {
+          n += 1;
+        }
+      });
+      return n;
+    }
+    if (kind === "Clash") {
+      lines.forEach(function (line) {
+        if (/^\s*type:\s*(ss|ssr|vmess|vless|trojan|http|socks5|hysteria2|tuic)\b/i.test(line)) {
+          n += 1;
+        } else if (/^\s*-\s*\{/.test(line) && /\btype:\s*(ss|ssr|vmess|vless|trojan|http|socks5|hysteria2|tuic)\b/i.test(line)) {
+          n += 1;
+        }
+      });
+      return n;
+    }
+    lines.forEach(function (line) {
+      if (/^(ss|ssr|vmess|vless|trojan|hysteria2|hy2):\/\//i.test(line.trim())) {
+        n += 1;
+      }
+    });
+    return n;
   }
 
   function upload() {

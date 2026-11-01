@@ -188,3 +188,91 @@ function buildGroup(group, exclude) { return group; }
 		t.Fatal("lan opened")
 	}
 }
+
+func TestSpacedQuantumultXFeedsThreeClients(t *testing.T) {
+	body := "[dns]\nno-system\nserver=223.5.5.5\n[server_local]\n" +
+		"trojan = example.com:443, password=secret, over-tls=true, tls-host=edge.example, udp-relay=true, tls-verification=false, tag=日本 01\n" +
+		"shadowsocks = 1.2.3.4:8443, method=aes-128-gcm, password=secret, tag=大阪\n"
+	local, remote, dns := NodesForQuantumultX(body)
+	if len(local) != 2 || len(remote) != 0 {
+		t.Fatalf("local %#v remote %#v", local, remote)
+	}
+	if !strings.HasPrefix(local[0], "trojan = example.com:443,") || !strings.Contains(local[0], "tls-verification=false") || !strings.Contains(local[0], "tag=日本 01") {
+		t.Fatalf("qx trojan %#v", local[0])
+	}
+	if !strings.HasPrefix(local[1], "shadowsocks = 1.2.3.4:8443,") {
+		t.Fatalf("qx ss %#v", local[1])
+	}
+	joined := strings.Join(dns, "\n")
+	if !strings.Contains(joined, "no-system") || !strings.Contains(joined, "server=223.5.5.5") {
+		t.Fatalf("dns %#v", dns)
+	}
+
+	sr, srDNS := NodesForShadowrocket(body)
+	if len(sr) != 2 || !strings.Contains(sr[0], "日本 01 = trojan, example.com, 443") || !strings.Contains(sr[0], "password=secret") || !strings.Contains(sr[0], "sni=edge.example") || !strings.Contains(sr[0], "skip-cert-verify=true") || !strings.Contains(sr[0], "udp-relay=true") {
+		t.Fatalf("sr %#v", sr)
+	}
+	if !strings.Contains(sr[1], "大阪 = ss, 1.2.3.4, 8443") {
+		t.Fatalf("sr ss %#v", sr[1])
+	}
+	if !strings.Contains(srDNS, "223.5.5.5") {
+		t.Fatalf("sr dns %q", srDNS)
+	}
+
+	proxies, remotes, clashDNS := ClashNodes(body)
+	if len(proxies) != 2 || len(remotes) != 0 {
+		t.Fatalf("clash %#v remotes %#v", proxies, remotes)
+	}
+	got := proxies[0]
+	if got["type"] != "trojan" || got["server"] != "example.com" || got["password"] != "secret" || got["sni"] != "edge.example" || got["skip-cert-verify"] != true || got["udp"] != true {
+		t.Fatalf("clash trojan %#v", got)
+	}
+	if proxies[1]["type"] != "ss" || proxies[1]["server"] != "1.2.3.4" {
+		t.Fatalf("clash ss %#v", proxies[1])
+	}
+	names, _ := clashDNS["nameserver"].([]string)
+	if len(names) != 1 || names[0] != "223.5.5.5" {
+		t.Fatalf("clash dns %#v", clashDNS)
+	}
+
+	clash := "proxies:\n  - {name: 日本, type: trojan, server: example.com, port: 443, password: secret, sni: edge.example, skip-cert-verify: true, udp: true}\n"
+	back, _, _ := NodesForQuantumultX(clash)
+	if len(back) != 1 || !strings.Contains(back[0], "trojan=example.com:443") || !strings.Contains(back[0], "tls-verification=false") || !strings.Contains(back[0], "tag=日本") {
+		t.Fatalf("back %#v", back)
+	}
+	srBack, _ := NodesForShadowrocket(clash)
+	if len(srBack) != 1 || !strings.Contains(srBack[0], "skip-cert-verify=true") {
+		t.Fatalf("sr back %#v", srBack)
+	}
+}
+
+func TestQuantumultXKeepsSubscriptionDNS(t *testing.T) {
+	body := "[dns]\n" +
+		"no-system\n" +
+		"server=223.5.5.5\n" +
+		"server=10.0.0.1\n" +
+		"server=/*.example.com/1.1.1.1\n" +
+		"server=/example.com/system\n" +
+		"doh-server=https://dns.alidns.com/dns-query, https://doh.pub/dns-query\n" +
+		"alias=/dns.example/doh.example\n" +
+		"alias=not a host\n" +
+		"[server_local]\n" +
+		"trojan = example.com:443, password=secret, tag=日本\n"
+	_, _, dns := NodesForQuantumultX(body)
+	joined := strings.Join(dns, "\n")
+	for _, want := range []string{
+		"no-system",
+		"server=223.5.5.5",
+		"server=/*.example.com/1.1.1.1",
+		"server=/example.com/system",
+		"doh-server=https://dns.alidns.com/dns-query, https://doh.pub/dns-query",
+		"alias=/dns.example/doh.example",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %s\n%#v", want, dns)
+		}
+	}
+	if strings.Contains(joined, "10.0.0.1") || strings.Contains(joined, "not a host") {
+		t.Fatalf("kept unsafe dns %#v", dns)
+	}
+}

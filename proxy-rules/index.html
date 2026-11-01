@@ -13,7 +13,7 @@
       font: 16px/1.4 "Songti SC", "Noto Serif SC", Palatino, serif;
     }
     main {
-      width: min(640px, calc(100% - 32px));
+      width: min(760px, calc(100% - 32px));
       margin: 0 auto;
       padding: 32px 0 48px;
     }
@@ -21,15 +21,49 @@
     textarea {
       width: 100%;
       min-height: 88px;
+      max-height: 240px;
       padding: 10px;
       border: 1px solid #1c1c1c;
-      font: 14px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      resize: vertical;
+      font: 14px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     }
-    .clients {
+    textarea.editing {
+      min-height: 280px;
+      max-height: 70vh;
+    }
+    #sheet { border: 1px solid #1c1c1c; background: #fff; }
+    #sheet[hidden], textarea[hidden] { display: none; }
+    .sheet-bar {
       display: flex;
-      gap: 8px;
-      margin-top: 12px;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 8px 10px;
+      border-bottom: 1px solid #1c1c1c;
     }
+    #meta { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+    .sheet-actions { display: flex; gap: 8px; flex: none; }
+    .sheet-actions button { padding: 4px 8px; }
+    #preview {
+      max-height: 320px;
+      overflow: auto;
+      background: #f7f5f0;
+      font: 12px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    #preview.open { max-height: min(70vh, 720px); }
+    .prow { display: grid; grid-template-columns: 3.5em max-content; min-width: 100%; }
+    .ln {
+      position: sticky;
+      left: 0;
+      color: #777;
+      text-align: right;
+      padding-right: 8px;
+      background: #f7f5f0;
+      user-select: none;
+    }
+    .code { white-space: pre; padding-right: 12px; }
+    .gap { padding: 6px 10px; color: #555; background: #efeae2; }
+    .clients { display: flex; gap: 8px; margin-top: 12px; }
     button, .file {
       border: 1px solid #1c1c1c;
       background: #fff;
@@ -58,7 +92,8 @@
     #qr svg { width: 220px; height: auto; }
     .qr-miss { margin: 0; color: #555; }
     @media (max-width: 640px) {
-      .clients, .linkrow { flex-direction: column; }
+      .clients, .linkrow, .sheet-bar, .actions { flex-direction: column; }
+      .sheet-actions { width: 100%; }
     }
   </style>
 </head>
@@ -66,7 +101,20 @@
   <main>
     <h1>订阅链接</h1>
     <form>
-      <textarea id="subscription" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="订阅链接，或 Quantumult X / Shadowrocket / Clash 配置"></textarea>
+      <div id="composer">
+        <textarea id="subscription" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="订阅链接，或拖入 Quantumult X / Shadowrocket / Clash 配置"></textarea>
+        <div id="sheet" hidden>
+          <div class="sheet-bar">
+            <p id="meta"></p>
+            <div class="sheet-actions">
+              <button type="button" id="toggle">展开</button>
+              <button type="button" id="edit">编辑</button>
+              <button type="button" id="clear">清空</button>
+            </div>
+          </div>
+          <div id="preview"></div>
+        </div>
+      </div>
       <div class="actions">
         <label class="file">选择文件<input id="file" type="file" accept=".conf,.txt,.yaml,.yml,.list"></label>
         <button type="button" id="make" hidden>生成</button>

@@ -341,6 +341,9 @@ func parseQXProxy(line string) (proxy, bool) {
 	item.Network = "tcp"
 	item.UDP = boolOpt(opts["udp-relay"])
 	item.TLS = boolOpt(opts["over-tls"]) || boolOpt(opts["tls"]) || boolOpt(opts["tls13"])
+	if raw, ok := opts["tls-verification"]; ok {
+		item.SkipCert = !boolOpt(raw)
+	}
 	item.SNI = first(opts["tls-host"], opts["obfs-host"], opts["sni"])
 	item.Host = cleanValue(opts["obfs-host"])
 	item.Path = cleanValue(opts["obfs-uri"])
@@ -605,6 +608,9 @@ func (p proxy) qx() (string, bool) {
 		if p.UDP {
 			add("udp-relay", "true")
 		}
+		if p.SkipCert {
+			add("tls-verification", "false")
+		}
 	case "http":
 		typ = "http"
 		if p.TLS {
@@ -615,6 +621,9 @@ func (p proxy) qx() (string, bool) {
 		if p.TLS {
 			add("over-tls", "true")
 			add("tls-host", p.SNI)
+		}
+		if p.SkipCert {
+			add("tls-verification", "false")
 		}
 	case "socks5":
 		typ = "socks5"
@@ -739,6 +748,9 @@ func (p proxy) sr() (string, bool) {
 		}
 		if p.UDP {
 			add("udp-relay", "true")
+		}
+		if p.SkipCert {
+			add("skip-cert-verify", "true")
 		}
 	case "http":
 		typ = "http"
@@ -910,6 +922,9 @@ func (p proxy) clash() (map[string]any, bool) {
 			if len(ws) > 0 {
 				out["ws-opts"] = ws
 			}
+		}
+		if p.SkipCert {
+			out["skip-cert-verify"] = true
 		}
 	case "http", "socks5":
 		out["type"] = p.Type
@@ -1130,12 +1145,16 @@ func qxServerLine(line string) bool {
 	if strings.Contains(lower, "passphrase") || strings.Contains(lower, "p12") {
 		return false
 	}
-	for _, prefix := range []string{"shadowsocks=", "shadowsocksr=", "vmess=", "vless=", "trojan=", "http=", "https=", "socks5=", "socks5-tls=", "hysteria2=", "hysteria="} {
-		if strings.HasPrefix(lower, prefix) {
-			return true
-		}
+	head, _, ok := strings.Cut(lower, "=")
+	if !ok {
+		return false
 	}
-	return false
+	switch strings.TrimSpace(head) {
+	case "shadowsocks", "shadowsocksr", "vmess", "vless", "trojan", "http", "https", "socks5", "socks5-tls", "hysteria2", "hysteria":
+		return true
+	default:
+		return false
+	}
 }
 
 func qxType(typ string) string {
@@ -1321,31 +1340,112 @@ func acceptDNS(line string) bool {
 	switch {
 	case line == "no-ipv6" || line == "no-system" || line == "prefer-doh3":
 		return true
-	case strings.HasPrefix(line, "server="), strings.HasPrefix(line, "doh-server="), strings.HasPrefix(line, "doh3-server="):
-		return dnsTargetOK(line)
+	case strings.HasPrefix(line, "server="):
+		return dnsServerValue(strings.TrimSpace(strings.TrimPrefix(line, "server=")))
+	case strings.HasPrefix(line, "doh-server="), strings.HasPrefix(line, "doh3-server="):
+		return dnsDoHValue(strings.TrimSpace(line[strings.IndexByte(line, '=')+1:]))
+	case strings.HasPrefix(line, "alias="):
+		return dnsAliasValue(strings.TrimSpace(strings.TrimPrefix(line, "alias=")))
 	default:
 		return false
 	}
 }
 
-func dnsTargetOK(line string) bool {
-	value := strings.TrimSpace(line[strings.IndexByte(line, '=')+1:])
+func dnsServerValue(value string) bool {
 	if value == "" || strings.ContainsAny(value, " \t") {
 		return false
 	}
-	if strings.HasPrefix(line, "doh-server=") || strings.HasPrefix(line, "doh3-server=") {
-		return Screen(value) == nil
+	if strings.HasPrefix(value, "/") {
+		pattern, target, ok := strings.Cut(strings.TrimPrefix(value, "/"), "/")
+		if !ok || strings.Contains(target, "/") || !dnsName(pattern) {
+			return false
+		}
+		if target == "system" {
+			return true
+		}
+		return publicIP(target)
 	}
-	target := value
-	if slash := strings.LastIndex(value, "/"); slash >= 0 {
-		target = value[slash+1:]
-	}
+	return publicIP(value)
+}
+
+func publicIP(target string) bool {
 	host := target
 	if h, _, err := net.SplitHostPort(target); err == nil {
 		host = h
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && !rejectedIP(ip)
+}
+
+func dnsDoHValue(value string) bool {
+	if value == "" {
+		return false
+	}
+	urls := 0
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return false
+		}
+		if strings.HasPrefix(part, "https://") || strings.HasPrefix(part, "http://") {
+			if Screen(part) != nil {
+				return false
+			}
+			urls++
+			continue
+		}
+		key, raw, ok := strings.Cut(part, "=")
+		if !ok {
+			return false
+		}
+		key = strings.ToLower(strings.TrimSpace(key))
+		raw = strings.TrimSpace(raw)
+		switch key {
+		case "exclude", "include", "tag":
+			if raw == "" || strings.ContainsAny(raw, " \t") {
+				return false
+			}
+		case "exclude-from":
+			if Screen(raw) != nil {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return urls > 0
+}
+
+func dnsAliasValue(value string) bool {
+	if !strings.HasPrefix(value, "/") || strings.ContainsAny(value, " \t") {
+		return false
+	}
+	left, right, ok := strings.Cut(strings.TrimPrefix(value, "/"), "/")
+	if !ok || strings.Contains(right, "/") {
+		return false
+	}
+	return dnsName(left) && dnsName(right)
+}
+
+func dnsName(pattern string) bool {
+	if pattern == "" || len(pattern) > 253 || strings.ContainsAny(pattern, " \t/?#@") {
+		return false
+	}
+	body := pattern
+	if strings.HasPrefix(body, "*.") {
+		body = strings.TrimPrefix(body, "*.")
+	}
+	if body == "" || strings.Contains(body, "*") || strings.HasPrefix(body, ".") || strings.HasSuffix(body, ".") || strings.Contains(body, "..") {
+		return false
+	}
+	for _, r := range body {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func srDNSToQX(line string) []string {
