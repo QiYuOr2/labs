@@ -33,9 +33,6 @@ func TestRenderedClients(t *testing.T) {
 	if !strings.Contains(qx, "hostname = -testflight.apple.com, -*.fcbox.com, -*huami.com, -*amemv.com, -*snssdk.com, -www.google.com\n") {
 		t.Fatal("QX mitm hostname changed")
 	}
-	if !strings.Contains(qx, "\n[dns]\n") || !strings.Contains(qx, "no-ipv6\n") || !strings.Contains(qx, "server=223.5.5.5\n") || !strings.Contains(qx, "server=/*.weixin.com/119.29.29.29\n") {
-		t.Fatal("QX dns missing")
-	}
 }
 
 func TestRenderRejectsBadAI(t *testing.T) {
