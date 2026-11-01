@@ -28,24 +28,20 @@ func MergeQuantumultX(base, subscription, sourceURL string) (string, error) {
 	if strings.TrimSpace(base) == "" {
 		return "", fmt.Errorf("规则配置是空的")
 	}
-	if err := screenURL(sourceURL); err != nil {
-		return "", err
+	if serve.LooksLikeHTML(subscription) && strings.TrimSpace(sourceURL) == "" {
+		return "", fmt.Errorf("配置不是订阅")
 	}
-	body := normalize(subscription)
-	dns, local, remote := extract(body)
-	if len(local) == 0 && len(remote) == 0 {
-		if decoded, ok := decodeBase64(body); ok {
-			dns2, local2, remote2 := extract(decoded)
-			if len(dns) == 0 {
-				dns = dns2
-			}
-			local, remote = local2, remote2
-		}
-	}
+	local, remote, dns := serve.NodesForQuantumultX(subscription)
 	if len(dns) == 0 {
-		dns = clashDNS(body)
+		dns = clashDNS(normalize(subscription))
 	}
 	if len(local) == 0 && len(remote) == 0 {
+		if strings.TrimSpace(sourceURL) == "" {
+			return "", fmt.Errorf("没有节点")
+		}
+		if err := screenURL(sourceURL); err != nil {
+			return "", err
+		}
 		remote = []string{remoteLine(sourceURL)}
 	}
 	merged, err := replaceSection(base, "dns", strings.Join(dns, "\n"))
@@ -971,16 +967,23 @@ const defaultProfileURL = "https://raw.githubusercontent.com/QiYuOr2/labs/main/p
 
 // Handler is the Vercel function entry. Quantumult X calls /api/qx?url=...
 func Handler(w http.ResponseWriter, r *http.Request) {
-	switch clientFrom(r) {
+	client := clientFrom(r)
+	switch client {
+	case "qx", "sr", "flclash":
+	default:
+		http.Error(w, "不支持的客户端", http.StatusBadRequest)
+		return
+	}
+	if r.Method == http.MethodPost || strings.TrimSpace(r.URL.Query().Get("id")) != "" {
+		handleUpload(w, r, client)
+		return
+	}
+	switch client {
 	case "sr":
 		serve.Shadowrocket(w, r)
 		return
 	case "flclash":
 		serve.FlClash(w, r)
-		return
-	case "qx":
-	default:
-		http.Error(w, "不支持的客户端", http.StatusBadRequest)
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {

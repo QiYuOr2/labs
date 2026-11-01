@@ -31,10 +31,11 @@ type flGroup struct {
 }
 
 type flRule struct {
-	Kind  string `json:"kind"`
-	Group string `json:"group"`
-	URL   string `json:"url,omitempty"`
-	Param string `json:"param,omitempty"`
+	Kind     string `json:"kind"`
+	Group    string `json:"group"`
+	URL      string `json:"url,omitempty"`
+	Param    string `json:"param,omitempty"`
+	Interval int    `json:"interval,omitempty"`
 }
 
 // FlClash writes an override script whose rules are already expanded.

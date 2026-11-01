@@ -42,7 +42,11 @@ Clash 不能跑 Quantumult X 的重写脚本。去广告靠分流里的 REJECT�
 
 GitHub Actions 不能接这个请求。它只在推送后生成静态文件。订阅链接要作为参数传进来，并且要现拉现合并，所以这部分部署到 Vercel。
 
-不想手写编码时，打开 `https://proxy-rules.vercel.app/`。贴上机场订阅，页面给出可用链接和二维码。编码在浏览器里完成，这个页面不会收到订阅。
+不想手写编码时，打开 `https://proxy.qiyuor2.me/`。只贴订阅链接时，编码在浏览器里完成，页面不会收到订阅。机场拒绝服务器拉取时，把本地保存的配置文件传上来，页面返回一个合并后的固定链接和二维码。
+
+上传认 Quantumult X、Shadowrocket、Clash 三种配置，也认 `ss://`、`vmess://`、`trojan://`、`vless://`、`hysteria2://` 节点列表。选哪个按钮，就得到哪种客户端的配置。同一份文件里已经是那种格式时，节点行原样保留；不是时，只转换常见协议。Clash 里的 Reality、gRPC 这些原样留在 Clash 配置里，转成另外两个客户端时会丢掉认不了的节点。
+
+上传后的链接只保存合并结果，不保存原始文件。节点正文不会跟着机场变，规则也不会跟着仓库变，要更新就再传一次。文件里如果只有订阅地址、没有节点正文，Quantumult X 和 Clash 会把那个地址留下来，由客户端自己拉；小火箭没有这种字段，需要节点正文。重开页面后，同一个浏览器会复用上次的链接，再传一次是覆盖，不用改客户端里的地址。
 
 1. Vercel 项目 `proxy-rules` 连接这个仓库，Root Directory 是 `proxy-rules`。不要用仓库根目录，`go.mod` 在这一层。
 2. Framework Preset 是 Other。入口是 `api/qx.go`，路由是 `/api/qx`。不要选 Go Server，这里没有 `main.go` 或 `cmd/server/main.go`。
@@ -85,8 +89,9 @@ GitHub Actions 不能接这个请求。它只在推送后生成静态文件。�
 `https://proxy-rules.vercel.app/api/flclash`
 
 1. 先导入机场订阅，再把这个地址填进覆写脚本并关联。它只替换策略组、规则和 `mode`，不改节点，也不打开 `allow-lan`。
-2. 名单写进 `config.rules`，`rule-providers` 置空。规则保持 Clash 的 `DOMAIN-SUFFIX` 写法，策略用原来的组名。
-3. 任一名单下载失败时，这次仍返回原来的远程脚本。
+2. 不想分两步时，在页面上选 FlClash，上传任意一种配置。得到的是完整 Clash 配置，作为配置订阅导入，不要填进覆写脚本。`allow-lan` 固定关闭。「🤖 AI」仍然只有手动节点。
+3. 名单写进 `config.rules`，`rule-providers` 置空。规则保持 Clash 的 `DOMAIN-SUFFIX` 写法，策略用原来的组名。
+4. 任一名单下载失败时，这次仍返回原来的远程脚本。上传生成的完整配置也一样：名单失败时保留远程 `RULE-SET`，不打乱顺序。
 
 ## 策略组
 

@@ -160,8 +160,7 @@ func setUpdateURL(config, next string) string {
 }
 
 func mergeShadowrocket(config, subscription string) string {
-	proxies := shadowrocketProxies(subscription)
-	dns := shadowrocketDNS(subscription)
+	proxies, dns := NodesForShadowrocket(subscription)
 	if len(proxies) > 0 {
 		if updated, err := replaceSection(config, "Proxy", strings.Join(proxies, "\n")); err == nil {
 			config = updated

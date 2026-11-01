@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -420,5 +421,217 @@ func TestDispatchShadowrocketPath(t *testing.T) {
 	Handler(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "DOMAIN-SUFFIX,one.example,DIRECT") {
 		t.Fatalf("status %d\n%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestMergeWithoutURLUsesNodes(t *testing.T) {
+	got, err := MergeQuantumultX(baseProfile, "[server_local]\ntrojan=example.com:443, password=secret, tag=日本\n", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "trojan=example.com:443, password=secret, tag=日本") {
+		t.Fatalf("%s", got)
+	}
+	if strings.Contains(got, "tag=subscription") {
+		t.Fatal("empty url became a remote")
+	}
+}
+
+func TestMergeWithoutNodesOrURL(t *testing.T) {
+	_, err := MergeQuantumultX(baseProfile, "[dns]\nno-ipv6\n", "")
+	if err == nil || err.Error() != "没有节点" {
+		t.Fatalf("%v", err)
+	}
+	_, err = MergeQuantumultX(baseProfile, "[dns]\nno-ipv6\n", "http://127.0.0.1/a")
+	if err == nil || err.Error() != "订阅链接无效" {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestMergeConvertsShadowrocket(t *testing.T) {
+	body := "[Proxy]\n日本 = ss, example.com, 443, encrypt-method=aes-128-gcm, password=secret\n"
+	got, err := MergeQuantumultX(baseProfile, body, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "shadowsocks=example.com:443") || !strings.Contains(got, "password=secret") {
+		t.Fatalf("%s", got)
+	}
+}
+
+func TestUploadMergesBody(t *testing.T) {
+	orig := fetchText
+	resetRuleCache()
+	store := serve.NewMemoryStore()
+	serve.SetStore(store)
+	t.Cleanup(func() {
+		fetchText = orig
+		resetRuleCache()
+		serve.SetStore(nil)
+		profileMu.Lock()
+		profileBody = ""
+		profileAt = profileAt.Add(-timeHour)
+		profileMu.Unlock()
+	})
+	t.Setenv("RULES_PROFILE_URL", "https://example.com/profile")
+	t.Setenv("RULES_PUBLIC_BASE", "https://proxy.example")
+	fetchText = func(_ context.Context, raw string) (string, error) {
+		switch raw {
+		case "https://example.com/profile":
+			return baseProfile, nil
+		case "https://example.com/rules.list":
+			return "DOMAIN-SUFFIX,example.com\n", nil
+		default:
+			t.Fatalf("unexpected fetch %s", raw)
+			return "", nil
+		}
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx", strings.NewReader("[server_local]\nvmess=example.com:443, method=chacha20-ietf-poly1305, password=secret, tag=日本\n"))
+	rec := httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"url":"https://proxy.example/api/qx?id=`) {
+		t.Fatalf("body %s", rec.Body.String())
+	}
+	var payload struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	id := strings.TrimPrefix(payload.URL, "https://proxy.example/api/qx?id=")
+	saved, err := store.Get(t.Context(), "subs/qx/"+id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(saved, "vmess=example.com:443") || !strings.Contains(saved, "HOST-SUFFIX,example.com,🎯 全球直连") {
+		t.Fatalf("saved missing pieces\n%s", saved)
+	}
+	if strings.Contains(saved, "https://example.com/rules.list") {
+		t.Fatal("remote filter remained")
+	}
+	got := httptest.NewRequest(http.MethodGet, "/api/qx?id="+id, nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, got)
+	if rec.Code != http.StatusOK || rec.Header().Get("Cache-Control") != "no-store" || !strings.Contains(rec.Body.String(), "password=secret") {
+		t.Fatalf("get %d %s", rec.Code, rec.Body.String())
+	}
+
+	again := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+id, strings.NewReader("[server_local]\ntrojan=example.com:8443, password=next, tag=大阪\n"))
+	rec = httptest.NewRecorder()
+	Handler(rec, again)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), id) {
+		t.Fatalf("overwrite %d %s", rec.Code, rec.Body.String())
+	}
+	saved, err = store.Get(t.Context(), "subs/qx/"+id)
+	if err != nil || !strings.Contains(saved, "trojan=example.com:8443") || strings.Contains(saved, "vmess=example.com:443") {
+		t.Fatalf("overwrite stored %v", err)
+	}
+
+	missing := httptest.NewRequest(http.MethodGet, "/api/qx", nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, missing)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "缺少 url") {
+		t.Fatalf("bare get %d %s", rec.Code, rec.Body.String())
+	}
+	html := httptest.NewRequest(http.MethodPost, "/api/qx", strings.NewReader("<!DOCTYPE html><html></html>"))
+	rec = httptest.NewRecorder()
+	Handler(rec, html)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "配置不是订阅") {
+		t.Fatalf("html %d %s", rec.Code, rec.Body.String())
+	}
+	bad := httptest.NewRequest(http.MethodGet, "/api/qx?id=nope", nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, bad)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad id %d", rec.Code)
+	}
+}
+
+func TestUploadClashAndShadowrocket(t *testing.T) {
+	orig := fetchText
+	serveOrig := serve.FetchText
+	resetRuleCache()
+	serve.ResetCache()
+	store := serve.NewMemoryStore()
+	serve.SetStore(store)
+	t.Cleanup(func() {
+		fetchText = orig
+		serve.FetchText = serveOrig
+		resetRuleCache()
+		serve.ResetCache()
+		serve.SetStore(nil)
+	})
+	t.Setenv("RULES_SR_URL", "https://example.com/sr.conf")
+	t.Setenv("RULES_FLCLASH_URL", "https://example.com/flclash.js")
+	t.Setenv("RULES_PUBLIC_BASE", "https://proxy.example")
+	srConf := "[General]\ndns-server = system\nupdate-url = https://example.com/old\n\n[Proxy]\n\n[Proxy Group]\n\n[Rule]\nRULE-SET,https://example.com/one.list,DIRECT\nFINAL,DIRECT\n"
+	script := `function main(config) { var spec = {"groups":[{"name":"🤖 AI","type":"select","proxies":["DIRECT"]}],"rules":[{"kind":"url","group":"🤖 AI","url":"https://example.com/ai.list"},{"kind":"final","group":"🐟 漏网之鱼"}]}; return config; }
+function buildGroup(group, exclude) { return group; }
+`
+	serve.FetchText = func(_ context.Context, raw string) (string, error) {
+		switch raw {
+		case "https://example.com/sr.conf":
+			return srConf, nil
+		case "https://example.com/one.list":
+			return "DOMAIN-SUFFIX,one.example\n", nil
+		case "https://example.com/flclash.js":
+			return script, nil
+		case "https://example.com/ai.list":
+			return "DOMAIN-SUFFIX,openai.com\n", nil
+		default:
+			t.Fatalf("unexpected %s", raw)
+			return "", nil
+		}
+	}
+	clash := "proxies:\n  - {name: 大阪, type: trojan, server: example.com, port: 443, password: secret, sni: example.com}\n"
+	req := httptest.NewRequest(http.MethodPost, "/api/qx?client=sr", strings.NewReader(clash))
+	rec := httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("sr %d %s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(payload.URL, "https://proxy.example/api/sr?id=") {
+		t.Fatalf("url %s", payload.URL)
+	}
+	id := strings.TrimPrefix(payload.URL, "https://proxy.example/api/sr?id=")
+	saved, err := store.Get(t.Context(), "subs/sr/"+id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(saved, "大阪 = trojan, example.com, 443") || !strings.Contains(saved, "DOMAIN-SUFFIX,one.example,DIRECT") || !strings.Contains(saved, "update-url = "+payload.URL) {
+		t.Fatalf("sr saved\n%s", saved)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/qx?client=flclash", strings.NewReader("[Proxy]\n日本 = ss, example.com, 443, encrypt-method=aes-128-gcm, password=secret\n"))
+	rec = httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("clash %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	id = strings.TrimPrefix(payload.URL, "https://proxy.example/api/flclash?id=")
+	saved, err = store.Get(t.Context(), "subs/flclash/"+id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(saved, "aes-128-gcm") || !strings.Contains(saved, "DOMAIN-SUFFIX,openai.com,🤖 AI") || !strings.Contains(saved, "allow-lan: false") {
+		t.Fatalf("clash saved\n%s", saved)
+	}
+	got := httptest.NewRequest(http.MethodGet, "/api/flclash?id="+id, nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, got)
+	if rec.Header().Get("Content-Type") != "text/yaml; charset=utf-8" {
+		t.Fatalf("type %s", rec.Header().Get("Content-Type"))
 	}
 }
