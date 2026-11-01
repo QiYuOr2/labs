@@ -118,6 +118,9 @@ func expandFlClash(ctx context.Context, script string) (string, bool) {
 			continue
 		}
 		for _, rule := range loaded[slot.remote] {
+			if !clashCompatible(rule) {
+				continue
+			}
 			line := Format(rule, refs[slot.remote].Policy)
 			if _, ok := seen[line]; ok {
 				continue

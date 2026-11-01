@@ -186,6 +186,9 @@ func clashRuleLines(ctx context.Context, spec flSpec) ([]string, map[string]any,
 			continue
 		}
 		for _, rule := range loaded[slot.remote] {
+			if !clashCompatible(rule) {
+				continue
+			}
 			line := Format(rule, refs[slot.remote].Policy)
 			if _, ok := seen[line]; ok {
 				continue

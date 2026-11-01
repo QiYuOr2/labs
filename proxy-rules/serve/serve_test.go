@@ -168,6 +168,70 @@ function buildGroup(group, exclude) {
 	}
 }
 
+func TestClashDropsUserAgent(t *testing.T) {
+	resetFetch(t)
+	script := `function main(config) {
+  var spec = {"groups":[{"name":"🌍 国外媒体","type":"select","proxies":["DIRECT"]}],"rules":[{"kind":"url","group":"🌍 国外媒体","url":"https://example.com/stream.list"},{"kind":"final","group":"🐟 漏网之鱼"}]};
+  return config;
+}
+function buildGroup(group, exclude) { return group; }
+`
+	FetchText = func(_ context.Context, raw string) (string, error) {
+		if raw != "https://example.com/stream.list" {
+			t.Fatalf("unexpected %s", raw)
+		}
+		return "USER-AGENT,Deezer*\nDOMAIN-SUFFIX,deezer.com\n", nil
+	}
+	got, ok := expandFlClash(context.Background(), script)
+	if !ok {
+		t.Fatal("not expanded")
+	}
+	if strings.Contains(got, "USER-AGENT") || !strings.Contains(got, "DOMAIN-SUFFIX,deezer.com,🌍 国外媒体") {
+		t.Fatalf("flclash kept user-agent\n%s", got)
+	}
+
+	t.Setenv("RULES_FLCLASH_URL", "https://example.com/flclash.js")
+	ResetCache()
+	FetchText = func(_ context.Context, raw string) (string, error) {
+		switch raw {
+		case "https://example.com/flclash.js":
+			return script, nil
+		case "https://example.com/stream.list":
+			return "USER-AGENT,Deezer*\nDOMAIN-SUFFIX,deezer.com\n", nil
+		default:
+			t.Fatalf("unexpected %s", raw)
+			return "", nil
+		}
+	}
+	body := "proxies:\n  - {name: 日本1, type: ss, server: example.com, port: 443, cipher: aes-128-gcm, password: secret}\n"
+	profile, err := BuildClash(t.Context(), body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(profile, "USER-AGENT") || !strings.Contains(profile, "DOMAIN-SUFFIX,deezer.com,🌍 国外媒体") {
+		t.Fatalf("clash profile kept user-agent\n%s", profile)
+	}
+
+	ResetCache()
+	sr := `[General]
+[Proxy Group]
+🌍 国外媒体 = select,DIRECT
+[Rule]
+RULE-SET,https://example.com/stream.list,🌍 国外媒体
+FINAL,🐟 漏网之鱼
+`
+	FetchText = func(_ context.Context, raw string) (string, error) {
+		if raw != "https://example.com/stream.list" {
+			t.Fatalf("unexpected %s", raw)
+		}
+		return "USER-AGENT,Deezer*\nDOMAIN-SUFFIX,deezer.com\n", nil
+	}
+	rocket, ok := expandShadowrocket(context.Background(), sr)
+	if !ok || !strings.Contains(rocket, "USER-AGENT,Deezer*,🌍 国外媒体") {
+		t.Fatalf("shadowrocket dropped user-agent\n%s", rocket)
+	}
+}
+
 func TestRealClientsKeepOrder(t *testing.T) {
 	resetFetch(t)
 	files, err := rules.Render(filepath.Join(".."))

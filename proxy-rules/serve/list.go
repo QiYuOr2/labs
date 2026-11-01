@@ -76,6 +76,12 @@ func Format(rule Rule, policy string) string {
 	return line
 }
 
+// clashCompatible reports whether Mihomo can load the rule.
+// USER-AGENT belongs to Surge. Quantumult X and Shadowrocket still keep it.
+func clashCompatible(rule Rule) bool {
+	return rule.Type != "USER-AGENT"
+}
+
 // LoadLists downloads every list. One failure returns false so callers keep the original order.
 func LoadLists(ctx context.Context, refs []Ref) ([][]Rule, bool) {
 	if len(refs) == 0 {
