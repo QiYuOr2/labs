@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -64,7 +65,148 @@ func MergeQuantumultX(base, subscription, sourceURL string) (string, error) {
 			return "", err
 		}
 	}
-	return merged, nil
+	// List matching node names in each region policy. Quantumult X leaves a
+	// server-tag-regex group empty when the pattern does not fit the whole tag,
+	// then the warning icon appears and traffic falls through to DIRECT.
+	return bindQXPolicies(merged, local)
+}
+
+func bindQXPolicies(config string, local []string) (string, error) {
+	tags := qxPolicyTags(local)
+	if len(tags) == 0 || !strings.Contains(config, "server-tag-regex=") {
+		return config, nil
+	}
+	sections := splitSections(config)
+	lines := sections["policy"]
+	if len(lines) == 0 {
+		return config, nil
+	}
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		out = append(out, bindQXPolicyLine(line, tags))
+	}
+	return replaceSection(config, "policy", strings.Join(out, "\n"))
+}
+
+func bindQXPolicyLine(line string, tags []string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";") {
+		return trimmed
+	}
+	kind, rest, ok := strings.Cut(trimmed, "=")
+	if !ok {
+		return trimmed
+	}
+	parts := splitCSV(rest)
+	if len(parts) == 0 {
+		return trimmed
+	}
+	var regex string
+	var params []string
+	var members []string
+	for _, part := range parts[1:] {
+		key, value, found := strings.Cut(part, "=")
+		if found && isQXPolicyParam(key) {
+			if strings.EqualFold(strings.TrimSpace(key), "server-tag-regex") {
+				regex = strings.TrimSpace(value)
+				continue
+			}
+			params = append(params, strings.TrimSpace(part))
+			continue
+		}
+		members = append(members, part)
+	}
+	if regex == "" {
+		return trimmed
+	}
+	matched := matchQXTags(regex, tags)
+	if len(matched) == 0 {
+		return trimmed
+	}
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(kind))
+	b.WriteByte('=')
+	b.WriteString(parts[0])
+	for _, tag := range matched {
+		b.WriteString(", ")
+		b.WriteString(tag)
+	}
+	for _, member := range members {
+		b.WriteString(", ")
+		b.WriteString(member)
+	}
+	for _, param := range params {
+		b.WriteString(", ")
+		b.WriteString(param)
+	}
+	return b.String()
+}
+
+func isQXPolicyParam(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "server-tag-regex", "resource-tag-regex", "check-interval", "tolerance", "img-url", "alive-checking":
+		return true
+	default:
+		return false
+	}
+}
+
+func matchQXTags(pattern string, tags []string) []string {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil
+	}
+	var matched []string
+	seen := map[string]bool{}
+	for _, tag := range tags {
+		if seen[tag] || !re.MatchString(tag) {
+			continue
+		}
+		seen[tag] = true
+		matched = append(matched, tag)
+	}
+	return matched
+}
+
+func qxPolicyTags(lines []string) []string {
+	var tags []string
+	seen := map[string]bool{}
+	for _, line := range lines {
+		tag, ok := qxServerTag(line)
+		if !ok || seen[tag] || skipPolicyTag(tag) || strings.Contains(tag, ",") {
+			continue
+		}
+		seen[tag] = true
+		tags = append(tags, tag)
+	}
+	return tags
+}
+
+func qxServerTag(line string) (string, bool) {
+	_, rest, ok := strings.Cut(line, "=")
+	if !ok {
+		return "", false
+	}
+	for _, part := range strings.Split(rest, ",") {
+		key, value, found := strings.Cut(strings.TrimSpace(part), "=")
+		if !found || !strings.EqualFold(strings.TrimSpace(key), "tag") {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value == "" || strings.ContainsAny(value, "\r\n") {
+			return "", false
+		}
+		return value, true
+	}
+	return "", false
+}
+
+func skipPolicyTag(tag string) bool {
+	lower := strings.ToLower(strings.TrimSpace(tag))
+	if strings.HasPrefix(lower, "traffic:") || strings.HasPrefix(lower, "expire:") {
+		return true
+	}
+	return strings.Contains(tag, "到期") || strings.Contains(tag, "剩余流量")
 }
 
 func extract(body string) (dns, local, remote []string) {
