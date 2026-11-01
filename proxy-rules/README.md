@@ -36,6 +36,27 @@ Clash 不能跑 Quantumult X 的重写脚本。去广告靠分流里的 REJECT�
 
 `qx/ad-rewrite.conf` 是重写来源，生成配置时会抄进去。也可以把里面每一行单独加到「重写」。`opt-parser=false` 是普通重写，`opt-parser=true` 要打开资源解析器。
 
+## 合并服务
+
+GitHub Actions 不能接这个请求。它只在推送后生成静态文件。订阅链接要作为参数传进来，并且要现拉现合并，所以这部分部署到 Vercel。
+
+1. Vercel 项目 `proxy-rules` 连接这个仓库，Root Directory 是 `proxy-rules`。不要用仓库根目录，`go.mod` 在这一层。
+2. Framework Preset 是 Other。入口是 `api/qx.go`，路由是 `/api/qx`。不要选 Go Server，这里没有 `main.go` 或 `cmd/server/main.go`。
+3. 部署完成后，在 Quantumult X 里把下面的地址作为完整配置下载，不要加到节点订阅：
+
+`https://proxy-rules.vercel.app/api/qx?url=<编码后的订阅链接>`
+
+服务拉取已生成的 `quantumultx.conf`，再拉取 `url`。只填入订阅里的 DNS 和节点。策略组、分流、重写和证书段仍用仓库里的。
+
+- 订阅是 Quantumult X 配置时，采用其中的 `[dns]`、`[server_local]` 和 `[server_remote]`。
+- 订阅是 Clash，而且没有 Quantumult X 节点行时，只转换 `dns` 里的 IP 和 DoH。节点写不进 Quantumult X 的行内格式，因此把原订阅链接放进 `[server_remote]`，节点仍由 Quantumult X 更新。
+- 订阅里没有 DNS 时，`[dns]` 保持空白，Quantumult X 使用自己的默认 DNS。
+- 本机、内网和云元数据地址会拒绝。
+- 不写入 `passphrase` 或 `p12`。这是完整配置，Quantumult X 大约每 24 小时整份覆盖一次，覆盖后需要重新信任证书，或从旧配置贴回证书。
+- 换订阅只改 `url`。不要把带订阅链接的地址写进仓库。Vercel 访问日志里会留下这条地址，用自己的账号部署。
+
+静态的 `quantumultx.conf` 仍然可以单独下载。那种用法不会带上订阅。
+
 ## Shadowrocket
 
 1. 首页添加机场订阅。这是节点，不是配置。
