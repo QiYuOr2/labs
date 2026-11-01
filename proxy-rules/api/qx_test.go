@@ -258,7 +258,7 @@ https://example.com/ad.conf, tag=ad, enabled=true
 	fetchText = func(_ context.Context, raw string) (string, error) {
 		switch raw {
 		case "https://example.com/one.list":
-			return "# c\nDOMAIN-SUFFIX,one.example # keep\nDOMAIN-SUFFIX,one.example\nPROCESS-NAME,v2ray\nIP-CIDR6,2001:db8::/32,no-resolve\nGEOIP,cn,DIRECT\n", nil
+			return "# c\nDOMAIN-SUFFIX,one.example # keep\nDOMAIN-SUFFIX,one.example\nPROCESS-NAME,v2ray\nIP-CIDR6,2001:db8::/32,no-resolve\nIP-CIDR6,113.248.172.245/32,no-resolve\nGEOIP,cn,DIRECT\n", nil
 		case "https://example.com/two.list":
 			return "DOMAIN,ai.example.com,DIRECT\nDOMAIN-KEYWORD,claude\n", nil
 		default:
@@ -271,6 +271,7 @@ https://example.com/ad.conf, tag=ad, enabled=true
 		expandedFilterBanner,
 		"HOST-SUFFIX,one.example,🎯 全球直连",
 		"IP6-CIDR,2001:db8::/32,🎯 全球直连,no-resolve",
+		"IP-CIDR,113.248.172.245/32,🎯 全球直连,no-resolve",
 		"GEOIP,CN,🎯 全球直连",
 		"HOST,ai.example.com,🤖 AI",
 		"HOST-KEYWORD,claude,🤖 AI",
@@ -285,7 +286,7 @@ https://example.com/ad.conf, tag=ad, enabled=true
 			t.Fatalf("order broken at %q\n%s", item, got)
 		}
 	}
-	if strings.Contains(got, "https://example.com/one.list") || strings.Contains(got, "PROCESS-NAME") || strings.Count(got, "HOST-SUFFIX,one.example") != 1 {
+	if strings.Contains(got, "IP6-CIDR,113.248.172.245/32") || strings.Contains(got, "https://example.com/one.list") || strings.Contains(got, "PROCESS-NAME") || strings.Count(got, "HOST-SUFFIX,one.example") != 1 {
 		t.Fatalf("filter remote leaked or duplicate kept\n%s", got)
 	}
 }

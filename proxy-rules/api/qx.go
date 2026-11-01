@@ -926,11 +926,16 @@ func classifyRule(line, policy string) (string, int) {
 	}
 	switch mapped {
 	case "IP-CIDR", "IP6-CIDR":
-		_, network, err := net.ParseCIDR(pattern)
-		if err != nil {
+		canonical, v4, ok := canonicalCIDR(pattern)
+		if !ok {
 			return "", ruleUnknown
 		}
-		pattern = network.String()
+		pattern = canonical
+		if v4 {
+			mapped = "IP-CIDR"
+		} else {
+			mapped = "IP6-CIDR"
+		}
 	case "GEOIP":
 		if len(pattern) != 2 {
 			return "", ruleUnknown
@@ -951,6 +956,15 @@ func classifyRule(line, policy string) (string, int) {
 		out += ",no-resolve"
 	}
 	return out, ruleOK
+}
+
+func canonicalCIDR(pattern string) (string, bool, bool) {
+	_, network, err := net.ParseCIDR(pattern)
+	if err != nil {
+		return "", false, false
+	}
+	canonical := network.String()
+	return canonical, !strings.Contains(canonical, ":"), true
 }
 
 func stripInlineComment(line string) string {

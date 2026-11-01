@@ -291,3 +291,19 @@ func assertOrder(t *testing.T, body string, want []string) {
 		prev = idx
 	}
 }
+
+func TestParseListFixesCIDRFamily(t *testing.T) {
+	rules, ok := ParseList("IP-CIDR6,113.248.172.245/32,no-resolve\nIP6-CIDR,2001:db8::/32\nIP-CIDR,2001:db8:1::/48\n")
+	if !ok || len(rules) != 3 {
+		t.Fatalf("%v %#v", ok, rules)
+	}
+	if rules[0].Type != "IP-CIDR" || rules[0].Value != "113.248.172.245/32" || !rules[0].NoResolve {
+		t.Fatalf("v4 %#v", rules[0])
+	}
+	if rules[1].Type != "IP-CIDR6" || rules[1].Value != "2001:db8::/32" {
+		t.Fatalf("v6 %#v", rules[1])
+	}
+	if rules[2].Type != "IP-CIDR6" || rules[2].Value != "2001:db8:1::/48" {
+		t.Fatalf("relabel %#v", rules[2])
+	}
+}

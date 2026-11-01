@@ -89,7 +89,7 @@ GitHub Actions 不能接这个请求。它只在推送后生成静态文件。�
 `https://proxy-rules.vercel.app/api/flclash`
 
 1. 先导入机场订阅，再把这个地址填进覆写脚本并关联。它只替换策略组、规则和 `mode`，不改节点，也不打开 `allow-lan`。
-2. 不想分两步时，在页面上选 FlClash，上传任意一种配置。得到的是完整 Clash 配置，作为配置订阅导入，不要填进覆写脚本。`allow-lan` 固定关闭。「🤖 AI」仍然只有手动节点。
+2. 不想分两步时，在页面上选 Clash，上传任意一种配置。得到的是完整 Clash 配置，作为配置订阅导入，不要填进覆写脚本。`allow-lan` 固定关闭。「🤖 AI」仍然只有手动节点。
 3. 名单写进 `config.rules`，`rule-providers` 置空。规则保持 Clash 的 `DOMAIN-SUFFIX` 写法，策略用原来的组名。
 4. 任一名单下载失败时，这次仍返回原来的远程脚本。上传生成的完整配置也一样：名单失败时保留远程 `RULE-SET`，不打乱顺序。
 
