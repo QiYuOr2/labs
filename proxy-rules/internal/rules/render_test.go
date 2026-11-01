@@ -72,6 +72,9 @@ func TestFlClashScript(t *testing.T) {
 	if len(want) == 0 {
 		t.Fatal("missing AI group")
 	}
+	for i, name := range want {
+		want[i] = clashName(name)
+	}
 
 	out := runScript(t, files[fileFlClash], map[string]any{
 		"mode":      "global",
@@ -81,6 +84,8 @@ func TestFlClashScript(t *testing.T) {
 			{"name": "香港-1"},
 			{"name": "官网"},
 			{"name": "美国-1"},
+			{"name": "🇯🇵 Japan | 01"},
+			{"name": "🇯🇵 Japan | 01"},
 		},
 		"proxy-providers": map[string]any{
 			"Airport": map[string]any{"type": "http", "url": "https://example.com/nodes"},
@@ -94,8 +99,16 @@ func TestFlClashScript(t *testing.T) {
 	if out["allow-lan"] != true {
 		t.Fatal("script changed allow-lan")
 	}
-	if got := len(out["proxies"].([]any)); got != 4 {
-		t.Fatalf("proxies = %d", got)
+	proxies := out["proxies"].([]any)
+	if len(proxies) != 6 {
+		t.Fatalf("proxies = %d", len(proxies))
+	}
+	names := make([]string, len(proxies))
+	for i, item := range proxies {
+		names[i] = item.(map[string]any)["name"].(string)
+	}
+	if strings.Join(names, ",") != "日本-1,香港-1,官网,美国-1,Japan | 01,Japan | 01 2" {
+		t.Fatalf("proxy names = %v", names)
 	}
 	providers := out["proxy-providers"].(map[string]any)
 	if _, ok := providers["Airport"]; !ok {
@@ -112,11 +125,11 @@ func TestFlClashScript(t *testing.T) {
 	for _, item := range groups {
 		group := item.(map[string]any)
 		switch group["name"] {
-		case aiGroupName:
+		case clashName(aiGroupName):
 			ai = group
-		case "🇯🇵 日本节点":
+		case "日本节点":
 			japan = group
-		case "♻️ 自动选择":
+		case "自动选择":
 			auto = group
 		}
 	}
@@ -151,6 +164,12 @@ func TestFlClashScript(t *testing.T) {
 	if auto["type"] != "url-test" {
 		t.Fatalf("auto = %#v", auto)
 	}
+	if ai["icon"] != qure("AI.png") || japan["icon"] != qure("Japan.png") {
+		t.Fatalf("icons ai=%v japan=%v", ai["icon"], japan["icon"])
+	}
+	if strings.Contains(files[fileFlClash], "🚀") || strings.Contains(files[fileFlClash], "🇯🇵") {
+		t.Fatal("FlClash still has emoji in group names")
+	}
 
 	rules := out["rules"].([]any)
 	ruleProviders := out["rule-providers"].(map[string]any)
@@ -181,7 +200,7 @@ func TestFlClashScript(t *testing.T) {
 	var aiID string
 	for _, rule := range rules {
 		line := rule.(string)
-		if strings.HasSuffix(line, ","+aiGroupName) {
+		if strings.HasSuffix(line, ","+clashName(aiGroupName)) {
 			aiID = strings.Split(line, ",")[1]
 		}
 	}
@@ -192,9 +211,36 @@ func TestFlClashScript(t *testing.T) {
 
 	qx := files[fileQuantumultX]
 	sr := files[fileShadowrocket]
-	assertAILine(t, qx, "static="+aiGroupName+",")
+	assertAILine(t, qx, "static="+clashName(aiGroupName)+",")
+	seen := map[string]string{}
+	for _, group := range cfg.Groups {
+		label := clashName(group.Name)
+		if prev, ok := seen[label]; ok {
+			t.Fatalf("QX name collision %s and %s", prev, group.Name)
+		}
+		seen[label] = group.Name
+		line := qxPolicyLine(qx, label)
+		if !strings.HasSuffix(line, ", img-url="+clashIcon(group.Name)) {
+			t.Fatalf("QX icon for %s: %s", group.Name, line)
+		}
+		if strings.Contains(line, group.Name) && group.Name != label {
+			t.Fatalf("QX policy kept emoji name %s", group.Name)
+		}
+	}
+	if emojiIn(qx) {
+		t.Fatal("QX still has emoji")
+	}
+	if !strings.Contains(qx, "static=下载,") || !strings.Contains(qx, "force-policy=下载") || !strings.Contains(qx, "final, 漏网之鱼") {
+		t.Fatal("QX policy and filter names diverged")
+	}
+	if strings.Contains(sr, "img-url=") {
+		t.Fatal("Shadowrocket has img-url")
+	}
+	if !strings.Contains(sr, "🚀 默认代理") {
+		t.Fatal("Shadowrocket lost emoji")
+	}
 	assertAILine(t, sr, aiGroupName+" = select,")
-	if strings.Contains(qx, "url-latency-benchmark="+aiGroupName) {
+	if strings.Contains(qx, "url-latency-benchmark="+clashName(aiGroupName)) {
 		t.Fatal("QX AI is a benchmark group")
 	}
 	if !strings.Contains(qx, "server-tag-regex=.*(港|HK|hk|Hong Kong|HongKong|hongkong).*") || strings.Contains(qx, "(?!") {
@@ -217,6 +263,30 @@ func TestFlClashScript(t *testing.T) {
 	if !strings.Contains(sr, "RULE-SET,") || !strings.Contains(sr, "GEOIP,CN,") || !strings.Contains(sr, "\n[Proxy]\n\n[Proxy Group]\n") {
 		t.Fatal("Shadowrocket shape")
 	}
+}
+
+func qxPolicyLine(text, name string) string {
+	prefix := name + ","
+	for _, line := range strings.Split(text, "\n") {
+		kind, rest, ok := strings.Cut(line, "=")
+		if !ok || !strings.HasPrefix(rest, prefix) {
+			continue
+		}
+		switch kind {
+		case "static", "url-latency-benchmark", "available":
+			return line
+		}
+	}
+	return ""
+}
+
+func emojiIn(text string) bool {
+	for _, r := range text {
+		if r == '\uFE0F' || r == '\u200D' || (r >= 0x2600 && r <= 0x27BF) || (r >= 0x2B00 && r <= 0x2BFF) || r >= 0x1F000 {
+			return true
+		}
+	}
+	return false
 }
 
 func assertAILine(t *testing.T, text, prefix string) {

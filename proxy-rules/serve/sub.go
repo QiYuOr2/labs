@@ -125,18 +125,84 @@ func parseBundle(body string) bundle {
 		return bundle{html: true}
 	}
 	if b, ok := parseDocument(body); ok {
-		return b
+		return finalizeNodes(b)
 	}
 	if decoded, ok := decodeText(body); ok && !looksHTML(decoded) {
 		if b, ok := parseDocument(decoded); ok {
-			return b
+			return finalizeNodes(b)
 		}
 		body = decoded
 	}
 	if b, ok := parseURIs(body); ok {
-		return b
+		return finalizeNodes(b)
 	}
 	return bundle{}
+}
+
+// finalizeNodes drops emoji from node names and keeps server tags in step with them.
+// Quantumult X matches a policy member to the tag text, so the two have to stay equal.
+func finalizeNodes(b bundle) bundle {
+	seen := map[string]bool{}
+	for i := range b.proxies {
+		name := b.proxies[i].Name
+		if name == "" {
+			name = "节点"
+		}
+		base := name
+		if seen[name] {
+			n := 2
+			for seen[base+" "+strconv.Itoa(n)] {
+				n++
+			}
+			name = base + " " + strconv.Itoa(n)
+		}
+		seen[name] = true
+		b.proxies[i].Name = name
+		if b.proxies[i].RawQX != "" {
+			b.proxies[i].RawQX = replaceQXTag(b.proxies[i].RawQX, name)
+		}
+		if b.proxies[i].RawSR != "" {
+			b.proxies[i].RawSR = replaceSRName(b.proxies[i].RawSR, name)
+		}
+	}
+	if len(b.qxLocal) > 0 {
+		b.qxLocal = b.qxLocal[:0]
+		for _, item := range b.proxies {
+			if item.RawQX != "" {
+				b.qxLocal = append(b.qxLocal, item.RawQX)
+			}
+		}
+	}
+	if len(b.srProxy) > 0 {
+		b.srProxy = b.srProxy[:0]
+		for _, item := range b.proxies {
+			if item.RawSR != "" {
+				b.srProxy = append(b.srProxy, item.RawSR)
+			}
+		}
+	}
+	return b
+}
+
+func replaceQXTag(line, name string) string {
+	parts := strings.Split(line, ",")
+	for i, part := range parts {
+		eq := strings.Index(part, "=")
+		if eq < 0 || !strings.EqualFold(strings.TrimSpace(part[:eq]), "tag") {
+			continue
+		}
+		parts[i] = part[:eq+1] + name
+		return strings.Join(parts, ",")
+	}
+	return line
+}
+
+func replaceSRName(line, name string) string {
+	eq := strings.Index(line, "=")
+	if eq < 0 {
+		return line
+	}
+	return name + " =" + line[eq+1:]
 }
 
 func parseDocument(body string) (bundle, bool) {
@@ -1725,6 +1791,7 @@ func cleanName(name string) string {
 	name = strings.ReplaceAll(name, "=", " ")
 	name = strings.ReplaceAll(name, "[", "")
 	name = strings.ReplaceAll(name, "]", "")
+	name = stripEmoji(name)
 	name = strings.Join(strings.Fields(name), " ")
 	runes := []rune(name)
 	if len(runes) > 80 {
@@ -1734,6 +1801,15 @@ func cleanName(name string) string {
 		return ""
 	}
 	return name
+}
+
+func stripEmoji(name string) string {
+	return strings.Map(func(r rune) rune {
+		if r == 0xFE0F || r == 0xFE0E || r == 0x200D || r == 0x20E3 || (r >= 0x2600 && r <= 0x27BF) || (r >= 0x2B00 && r <= 0x2BFF) || r >= 0x1F000 {
+			return -1
+		}
+		return r
+	}, name)
 }
 
 func cleanValue(value string) string {

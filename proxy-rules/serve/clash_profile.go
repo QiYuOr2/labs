@@ -74,6 +74,9 @@ func clashGroups(spec flSpec, providers bool) []map[string]any {
 	out := make([]map[string]any, 0, len(spec.Groups))
 	for _, group := range spec.Groups {
 		item := map[string]any{"name": group.Name, "type": group.Type}
+		if group.Icon != "" {
+			item["icon"] = group.Icon
+		}
 		if len(group.Proxies) > 0 {
 			item["proxies"] = group.Proxies
 			out = append(out, item)

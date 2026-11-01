@@ -23,6 +23,7 @@ type flSpec struct {
 type flGroup struct {
 	Name      string   `json:"name"`
 	Type      string   `json:"type"`
+	Icon      string   `json:"icon,omitempty"`
 	Proxies   []string `json:"proxies,omitempty"`
 	Regex     string   `json:"regex,omitempty"`
 	URL       string   `json:"url,omitempty"`

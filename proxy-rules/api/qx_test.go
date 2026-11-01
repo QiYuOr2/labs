@@ -147,7 +147,7 @@ func TestMergeRealProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got, "server=119.29.29.29") || !strings.Contains(got, "static=🤖 AI,") {
+	if !strings.Contains(got, "server=119.29.29.29") || !strings.Contains(got, "static=AI,") {
 		t.Fatalf("real profile merge changed shape\n%s", got[:400])
 	}
 	if strings.Contains(got, "passphrase =") || strings.Contains(got, "p12 =") {
@@ -375,8 +375,8 @@ func TestExpandRealProfile(t *testing.T) {
 		last = idx
 	}
 	for _, want := range []string{
-		"static=🤖 AI,",
-		"final, 🐟 漏网之鱼",
+		"static=AI,",
+		"final, 漏网之鱼",
 		"https://ddgksf2013.top/rewrite/StartUpAds.conf",
 		"[server_remote]",
 	} {
@@ -702,9 +702,9 @@ func TestDeleteStored(t *testing.T) {
 func TestMergeBindsRegionPolicies(t *testing.T) {
 	base := strings.Replace(baseProfile, "static=🤖 AI, direct", strings.Join([]string{
 		"static=🤖 AI, 🇯🇵 日本节点, direct",
-		"static=🇯🇵 日本节点, server-tag-regex=.*(日本|川日|东京|大阪|泉日|埼玉|沪日|深日|JP|Japan).*",
+		"static=🇯🇵 日本节点, server-tag-regex=.*(日本|川日|东京|大阪|泉日|埼玉|沪日|深日|JP|Japan).*, img-url=https://cdn.test/jp.png",
 		"static=🇭🇰 香港节点, server-tag-regex=.*(港|HK|hk|Hong Kong|HongKong|hongkong).*",
-		"url-latency-benchmark=♻️ 日本自动, server-tag-regex=.*(日本|川日|东京|大阪|泉日|埼玉|沪日|深日|JP|Japan).*, check-interval=300, tolerance=50",
+		"url-latency-benchmark=♻️ 日本自动, server-tag-regex=.*(日本|川日|东京|大阪|泉日|埼玉|沪日|深日|JP|Japan).*, check-interval=300, tolerance=50, img-url=https://cdn.test/auto.png",
 		"static=🌐 全部节点, server-tag-regex=.*",
 	}, "\n"), 1)
 	subscription := "[server_local]\n" +
@@ -717,15 +717,15 @@ func TestMergeBindsRegionPolicies(t *testing.T) {
 	}
 	policy := sectionText(t, got, "policy")
 	japan := policyLine(t, policy, "static=🇯🇵 日本节点,")
-	if strings.Contains(japan, "server-tag-regex") || !strings.Contains(japan, "🇯🇵 Japan | 01") || strings.Contains(japan, "Hong Kong") {
+	if strings.Contains(japan, "server-tag-regex") || !strings.Contains(japan, "Japan | 01") || strings.Contains(japan, "🇯🇵 Japan") || strings.Contains(japan, "Hong Kong") || !strings.HasSuffix(japan, ", img-url=https://cdn.test/jp.png") {
 		t.Fatalf("japan policy = %s", japan)
 	}
 	hongKong := policyLine(t, policy, "static=🇭🇰 香港节点,")
-	if strings.Contains(hongKong, "Japan") || !strings.Contains(hongKong, "🇭🇰 Hong Kong | 01") {
+	if strings.Contains(hongKong, "Japan") || !strings.Contains(hongKong, "Hong Kong | 01") || strings.Contains(hongKong, "🇭🇰 Hong") {
 		t.Fatalf("hong kong policy = %s", hongKong)
 	}
 	auto := policyLine(t, policy, "url-latency-benchmark=♻️ 日本自动,")
-	if !strings.Contains(auto, "🇯🇵 Japan | 01") || !strings.Contains(auto, "check-interval=300") || strings.Contains(auto, "server-tag-regex") {
+	if !strings.Contains(auto, "Japan | 01") || strings.Contains(auto, "🇯🇵 Japan") || !strings.Contains(auto, "check-interval=300") || strings.Contains(auto, "server-tag-regex") || !strings.HasSuffix(auto, ", img-url=https://cdn.test/auto.png") {
 		t.Fatalf("auto policy = %s", auto)
 	}
 	all := policyLine(t, policy, "static=🌐 全部节点,")
@@ -737,6 +737,10 @@ func TestMergeBindsRegionPolicies(t *testing.T) {
 	}
 	if strings.Contains(policy, "password=") || strings.Contains(policy, "example.com") {
 		t.Fatal("policy contains a server secret or host")
+	}
+	servers := sectionText(t, got, "server_local")
+	if !strings.Contains(servers, "tag=Japan | 01") || !strings.Contains(servers, "tag=Hong Kong | 01") || strings.Contains(servers, "🇯🇵") || strings.Contains(servers, "🇭🇰") {
+		t.Fatalf("server tag kept emoji\n%s", servers)
 	}
 }
 

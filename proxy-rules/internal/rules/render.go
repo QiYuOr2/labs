@@ -37,6 +37,9 @@ func Render(root string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := requireClashIcons(cfg); err != nil {
+		return nil, err
+	}
 	rewrites, err := readRewrites(root)
 	if err != nil {
 		return nil, err
@@ -130,6 +133,7 @@ type specFile struct {
 type specGroup struct {
 	Name      string   `json:"name"`
 	Type      string   `json:"type"`
+	Icon      string   `json:"icon,omitempty"`
 	Proxies   []string `json:"proxies,omitempty"`
 	Regex     string   `json:"regex,omitempty"`
 	URL       string   `json:"url,omitempty"`
@@ -156,8 +160,18 @@ func buildClients(cfg Config, rewrites []string) map[string]string {
 func renderFlClash(cfg Config) string {
 	spec := specFile{Exclude: cfg.Exclude}
 	for _, group := range cfg.Groups {
-		item := specGroup{Name: group.Name, Type: group.Type, Proxies: group.Proxies}
+		proxies := make([]string, len(group.Proxies))
+		for i, name := range group.Proxies {
+			proxies[i] = clashName(name)
+		}
+		item := specGroup{
+			Name:    clashName(group.Name),
+			Type:    group.Type,
+			Icon:    clashIcon(group.Name),
+			Proxies: proxies,
+		}
 		if len(group.Proxies) == 0 {
+			item.Proxies = nil
 			item.Regex = group.Regex
 			if group.Type != "select" {
 				item.URL = group.TestURL
@@ -168,7 +182,7 @@ func renderFlClash(cfg Config) string {
 		spec.Groups = append(spec.Groups, item)
 	}
 	for _, rule := range cfg.Rules {
-		item := specRule{Kind: rule.Kind, Group: rule.Group}
+		item := specRule{Kind: rule.Kind, Group: clashName(rule.Group)}
 		switch rule.Kind {
 		case "url":
 			item.URL = rule.URL
@@ -195,6 +209,7 @@ func renderFlClash(cfg Config) string {
 	b.WriteString("  if (!config || typeof config !== \"object\") {\n")
 	b.WriteString("    return config;\n")
 	b.WriteString("  }\n")
+	b.WriteString("  stripNodeEmoji(config);\n")
 	b.WriteString("  var spec = ")
 	b.Write(payload)
 	b.WriteString(";\n")
@@ -231,8 +246,66 @@ func renderFlClash(cfg Config) string {
 	b.WriteString("  return config;\n")
 	b.WriteString("}\n")
 	b.WriteString("\n")
+	b.WriteString("function stripNodeEmoji(config) {\n")
+	b.WriteString("  var list = config.proxies;\n")
+	b.WriteString("  if (!list || !list.length) {\n")
+	b.WriteString("    return;\n")
+	b.WriteString("  }\n")
+	b.WriteString("  var seen = {};\n")
+	b.WriteString("  var i;\n")
+	b.WriteString("  for (i = 0; i < list.length; i++) {\n")
+	b.WriteString("    var item = list[i];\n")
+	b.WriteString("    if (!item || typeof item.name !== \"string\") {\n")
+	b.WriteString("      continue;\n")
+	b.WriteString("    }\n")
+	b.WriteString("    var name = withoutEmoji(item.name);\n")
+	b.WriteString("    if (!name) {\n")
+	b.WriteString("      name = \"节点\";\n")
+	b.WriteString("    }\n")
+	b.WriteString("    var base = name;\n")
+	b.WriteString("    var n = 2;\n")
+	b.WriteString("    while (seen[name]) {\n")
+	b.WriteString("      name = base + \" \" + n;\n")
+	b.WriteString("      n++;\n")
+	b.WriteString("    }\n")
+	b.WriteString("    seen[name] = true;\n")
+	b.WriteString("    item.name = name;\n")
+	b.WriteString("  }\n")
+	b.WriteString("}\n")
+	b.WriteString("\n")
+	b.WriteString("function withoutEmoji(name) {\n")
+	b.WriteString("  var out = \"\";\n")
+	b.WriteString("  var i = 0;\n")
+	b.WriteString("  while (i < name.length) {\n")
+	b.WriteString("    var code = name.charCodeAt(i);\n")
+	b.WriteString("    var cp = code;\n")
+	b.WriteString("    var width = 1;\n")
+	b.WriteString("    if (code >= 0xD800 && code <= 0xDBFF && i + 1 < name.length) {\n")
+	b.WriteString("      var next = name.charCodeAt(i + 1);\n")
+	b.WriteString("      if (next >= 0xDC00 && next <= 0xDFFF) {\n")
+	b.WriteString("        cp = (code - 0xD800) * 0x400 + (next - 0xDC00) + 0x10000;\n")
+	b.WriteString("        width = 2;\n")
+	b.WriteString("      }\n")
+	b.WriteString("    }\n")
+	b.WriteString("    if (isEmojiCode(cp)) {\n")
+	b.WriteString("      i += width;\n")
+	b.WriteString("      continue;\n")
+	b.WriteString("    }\n")
+	b.WriteString("    out += name.substr(i, width);\n")
+	b.WriteString("    i += width;\n")
+	b.WriteString("  }\n")
+	b.WriteString("  return out.replace(/[ \\t]+/g, \" \").replace(/^ | $/g, \"\");\n")
+	b.WriteString("}\n")
+	b.WriteString("\n")
+	b.WriteString("function isEmojiCode(cp) {\n")
+	b.WriteString("  return cp === 0xFE0F || cp === 0xFE0E || cp === 0x200D || cp === 0x20E3 || (cp >= 0x2600 && cp <= 0x27BF) || (cp >= 0x2B00 && cp <= 0x2BFF) || cp >= 0x1F000;\n")
+	b.WriteString("}\n")
+	b.WriteString("\n")
 	b.WriteString("function buildGroup(group, exclude) {\n")
 	b.WriteString("  var out = { name: group.name, type: group.type };\n")
+	b.WriteString("  if (group.icon) {\n")
+	b.WriteString("    out.icon = group.icon;\n")
+	b.WriteString("  }\n")
 	b.WriteString("  if (group.proxies && group.proxies.length) {\n")
 	b.WriteString("    out.proxies = group.proxies;\n")
 	b.WriteString("    return out;\n")
@@ -277,12 +350,12 @@ func renderQuantumultX(cfg Config, rewrites []string) string {
 		switch rule.Kind {
 		case "url":
 			n++
-			fmt.Fprintf(&b, "%s, tag=labs-%02d, force-policy=%s, update-interval=%d, opt-parser=true, enabled=true\n", rule.URL, n, rule.Group, rule.Interval)
+			fmt.Fprintf(&b, "%s, tag=labs-%02d, force-policy=%s, update-interval=%d, opt-parser=true, enabled=true\n", rule.URL, n, qxBuiltin(rule.Group), rule.Interval)
 		case "geoip":
 			n++
-			fmt.Fprintf(&b, "%srules/geoip-cn.list, tag=labs-%02d, force-policy=%s, update-interval=86400, opt-parser=false, enabled=true\n", rawBase, n, rule.Group)
+			fmt.Fprintf(&b, "%srules/geoip-cn.list, tag=labs-%02d, force-policy=%s, update-interval=86400, opt-parser=false, enabled=true\n", rawBase, n, qxBuiltin(rule.Group))
 		case "final":
-			finalGroup = rule.Group
+			finalGroup = qxBuiltin(rule.Group)
 		}
 	}
 	b.WriteString("\n[filter_local]\n")
@@ -305,24 +378,32 @@ func renderQuantumultX(cfg Config, rewrites []string) string {
 }
 
 func qxPolicy(group Group) string {
+	var line string
 	if len(group.Proxies) > 0 {
 		members := make([]string, len(group.Proxies))
 		for i, name := range group.Proxies {
 			members[i] = qxBuiltin(name)
 		}
-		return fmt.Sprintf("%s=%s, %s", qxKind(group.Type), group.Name, strings.Join(members, ", "))
+		line = fmt.Sprintf("%s=%s, %s", qxKind(group.Type), qxBuiltin(group.Name), strings.Join(members, ", "))
+	} else {
+		// Quantumult X rejects lookahead, and an invalid filter matches nothing.
+		// The pattern also has to cover the whole tag, or names like "Japan | 01" miss the group.
+		regex := plainTagRegex(group.Regex)
+		name := qxBuiltin(group.Name)
+		switch group.Type {
+		case "url-test":
+			line = fmt.Sprintf("url-latency-benchmark=%s, server-tag-regex=%s, check-interval=%d, tolerance=%d", name, regex, group.Interval, group.Tolerance)
+		case "fallback":
+			line = fmt.Sprintf("available=%s, server-tag-regex=%s", name, regex)
+		default:
+			line = fmt.Sprintf("static=%s, server-tag-regex=%s", name, regex)
+		}
 	}
-	// Quantumult X rejects lookahead, and an invalid filter matches nothing.
-	// The pattern also has to cover the whole tag, or names like "Japan | 01" miss the group.
-	regex := plainTagRegex(group.Regex)
-	switch group.Type {
-	case "url-test":
-		return fmt.Sprintf("url-latency-benchmark=%s, server-tag-regex=%s, check-interval=%d, tolerance=%d", group.Name, regex, group.Interval, group.Tolerance)
-	case "fallback":
-		return fmt.Sprintf("available=%s, server-tag-regex=%s", group.Name, regex)
-	default:
-		return fmt.Sprintf("static=%s, server-tag-regex=%s", group.Name, regex)
+	// img-url is last so subscription merge can keep it after rewriting server-tag-regex.
+	if icon := clashIcon(group.Name); icon != "" {
+		line += ", img-url=" + icon
 	}
+	return line
 }
 
 func qxKind(typ string) string {
@@ -343,7 +424,7 @@ func qxBuiltin(name string) string {
 	case "REJECT":
 		return "reject"
 	default:
-		return name
+		return clashName(name)
 	}
 }
 

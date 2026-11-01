@@ -318,7 +318,7 @@ func TestRealClientsKeepOrder(t *testing.T) {
 		last = idx
 		n++
 	}
-	if !strings.Contains(out, "MATCH,🐟 漏网之鱼") || strings.Contains(out, "rule-providers") && strings.Contains(out, "type\":\"http\"") {
+	if !strings.Contains(out, "MATCH,漏网之鱼") || strings.Contains(out, "rule-providers") && strings.Contains(out, "type\":\"http\"") {
 		t.Fatal("fl shape")
 	}
 	if strings.Contains(out, "https://raw.githubusercontent.com/ACL4SSR/") {

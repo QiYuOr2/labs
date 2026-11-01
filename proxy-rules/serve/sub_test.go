@@ -161,7 +161,7 @@ func TestBuildClashKeepsManualAI(t *testing.T) {
 		switch raw {
 		case "https://example.com/flclash.js":
 			return `function main(config) {
-  var spec = {"exclude":"到期","groups":[{"name":"🤖 AI","type":"select","proxies":["🇯🇵 日本节点","DIRECT"]},{"name":"🇯🇵 日本节点","type":"select","regex":"(日本|JP)"},{"name":"♻️ 自动选择","type":"url-test","regex":".*","url":"http://www.gstatic.com/generate_204","interval":300,"tolerance":50}],"rules":[{"kind":"url","group":"🤖 AI","url":"https://example.com/ai.list"},{"kind":"final","group":"🐟 漏网之鱼"}]};
+  var spec = {"exclude":"到期","groups":[{"name":"AI","type":"select","icon":"https://example.com/ai.png","proxies":["日本节点","DIRECT"]},{"name":"日本节点","type":"select","regex":"(日本|JP)"},{"name":"自动选择","type":"url-test","regex":".*","url":"http://www.gstatic.com/generate_204","interval":300,"tolerance":50}],"rules":[{"kind":"url","group":"AI","url":"https://example.com/ai.list"},{"kind":"final","group":"漏网之鱼"}]};
   return config;
 }
 function buildGroup(group, exclude) { return group; }
@@ -190,8 +190,11 @@ function buildGroup(group, exclude) { return group; }
 	if strings.Contains(joined, "自动选择") || strings.Contains(joined, "故障转移") || !strings.Contains(joined, "日本节点") {
 		t.Fatalf("ai %#v", ai)
 	}
-	if len(doc.Rules) == 0 || doc.Rules[0] != "DOMAIN-SUFFIX,openai.com,🤖 AI" || doc.Rules[len(doc.Rules)-1] != "MATCH,🐟 漏网之鱼" {
+	if len(doc.Rules) == 0 || doc.Rules[0] != "DOMAIN-SUFFIX,openai.com,AI" || doc.Rules[len(doc.Rules)-1] != "MATCH,漏网之鱼" {
 		t.Fatalf("rules %#v", doc.Rules)
+	}
+	if doc.ProxyGroups[0]["icon"] != "https://example.com/ai.png" {
+		t.Fatalf("icon %#v", doc.ProxyGroups[0]["icon"])
 	}
 	if strings.Contains(got, "allow-lan: true") {
 		t.Fatal("lan opened")
@@ -359,4 +362,22 @@ func findMapping(node *yaml.Node, keys ...string) *yaml.Node {
 		current = next
 	}
 	return current
+}
+
+func TestStripEmojiFromNodeNames(t *testing.T) {
+	if cleanName("🇯🇵 Japan | 01") != "Japan | 01" || cleanName("香港-1") != "香港-1" || cleanName("⚡️HK 01") != "HK 01" {
+		t.Fatalf("cleanName %q %q %q", cleanName("🇯🇵 Japan | 01"), cleanName("香港-1"), cleanName("⚡️HK 01"))
+	}
+	body := "[server_local]\n" +
+		"trojan=example.com:443, password=secret, tag=🇯🇵 Japan | 01\n" +
+		"trojan=example.com:443, password=secret, tag=🇯🇵 Japan | 01\n" +
+		"trojan=example.com:443, password=secret, tag=香港-1\n"
+	local, _, _ := NodesForQuantumultX(body)
+	if len(local) != 3 || !strings.Contains(local[0], "tag=Japan | 01") || strings.Contains(local[0], "🇯🇵") || !strings.HasSuffix(local[1], "tag=Japan | 01 2") || !strings.Contains(local[2], "tag=香港-1") {
+		t.Fatalf("qx tags %v", local)
+	}
+	proxies, _ := NodesForShadowrocket("[Proxy]\n🇯🇵 Japan | 01 = trojan, example.com, 443, password=secret\n")
+	if len(proxies) != 1 || !strings.HasPrefix(proxies[0], "Japan | 01 = trojan,") || strings.Contains(proxies[0], "🇯🇵") {
+		t.Fatalf("sr %v", proxies)
+	}
 }
