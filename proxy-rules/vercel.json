@@ -6,7 +6,8 @@
   ],
   "functions": {
     "api/qx.go": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "regions": ["hnd1"]
     }
   }
 }
