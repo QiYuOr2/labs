@@ -196,8 +196,11 @@ func TestFlClashScript(t *testing.T) {
 	if strings.Contains(qx, "url-latency-benchmark="+aiGroupName) {
 		t.Fatal("QX AI is a benchmark group")
 	}
-	if !strings.Contains(qx, "server-tag-regex=") || !strings.Contains(qx, "到期") {
-		t.Fatal("QX region filter missing")
+	if !strings.Contains(qx, "server-tag-regex=(港|HK|hk|Hong Kong|HongKong|hongkong)") || strings.Contains(qx, "(?!") {
+		t.Fatal("QX region filter missing or uses unsupported lookahead")
+	}
+	if !strings.Contains(sr, "policy-regex-filter=(日本|川日|东京|大阪|泉日|埼玉|沪日|深日|JP|Japan)") || strings.Contains(sr, "(?!") {
+		t.Fatal("Shadowrocket region filter missing or uses unsupported lookahead")
 	}
 	if !strings.Contains(qx, "[server_remote]\n\n[server_local]") {
 		t.Fatal("QX server section is not empty")

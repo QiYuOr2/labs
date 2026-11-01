@@ -267,7 +267,7 @@ func renderQuantumultX(cfg Config, rewrites []string) string {
 	b.WriteString("# 分流和重写是远程资源，会自己更新。策略组变了才需要重新下载这份文件。\n")
 	b.WriteString("\n[general]\n\n[dns]\n\n[policy]\n")
 	for _, group := range cfg.Groups {
-		b.WriteString(qxPolicy(group, cfg.Exclude))
+		b.WriteString(qxPolicy(group))
 		b.WriteByte('\n')
 	}
 	b.WriteString("\n[server_remote]\n\n[server_local]\n\n[filter_remote]\n")
@@ -304,7 +304,7 @@ func renderQuantumultX(cfg Config, rewrites []string) string {
 	return b.String()
 }
 
-func qxPolicy(group Group, exclude string) string {
+func qxPolicy(group Group) string {
 	if len(group.Proxies) > 0 {
 		members := make([]string, len(group.Proxies))
 		for i, name := range group.Proxies {
@@ -312,7 +312,9 @@ func qxPolicy(group Group, exclude string) string {
 		}
 		return fmt.Sprintf("%s=%s, %s", qxKind(group.Type), group.Name, strings.Join(members, ", "))
 	}
-	regex := wrapExclude(group.Regex, exclude)
+	// Quantumult X rejects lookahead. An invalid server-tag-regex matches
+	// nothing, so the group cannot expand and traffic falls through to DIRECT.
+	regex := plainTagRegex(group.Regex)
 	switch group.Type {
 	case "url-test":
 		return fmt.Sprintf("url-latency-benchmark=%s, server-tag-regex=%s, check-interval=%d, tolerance=%d", group.Name, regex, group.Interval, group.Tolerance)
@@ -357,7 +359,7 @@ func renderShadowrocket(cfg Config) string {
 	fmt.Fprintf(&b, "update-url = %s%s\n", rawBase, fileShadowrocket)
 	b.WriteString("\n[Proxy]\n\n[Proxy Group]\n")
 	for _, group := range cfg.Groups {
-		b.WriteString(srPolicy(group, cfg.Exclude))
+		b.WriteString(srPolicy(group))
 		b.WriteByte('\n')
 	}
 	b.WriteString("\n[Rule]\n")
@@ -375,14 +377,15 @@ func renderShadowrocket(cfg Config) string {
 	return b.String()
 }
 
-func srPolicy(group Group, exclude string) string {
+func srPolicy(group Group) string {
 	if len(group.Proxies) > 0 {
 		parts := make([]string, 0, len(group.Proxies)+1)
 		parts = append(parts, group.Type)
 		parts = append(parts, group.Proxies...)
 		return group.Name + " = " + strings.Join(parts, ",")
 	}
-	regex := wrapExclude(group.Regex, exclude)
+	// Shadowrocket's policy filter also rejects lookahead and then matches nothing.
+	regex := plainTagRegex(group.Regex)
 	switch group.Type {
 	case "url-test":
 		return fmt.Sprintf("%s = url-test,policy-regex-filter=%s,url=%s,interval=%d,tolerance=%d,timeout=5", group.Name, regex, group.TestURL, group.Interval, group.Tolerance)
@@ -393,17 +396,11 @@ func srPolicy(group Group, exclude string) string {
 	}
 }
 
-func wrapExclude(match, exclude string) string {
-	if exclude == "" {
-		if match == "" {
-			return ".*"
-		}
-		return match
+func plainTagRegex(match string) string {
+	if match == "" {
+		return ".*"
 	}
-	if match == "" || match == ".*" {
-		return "^(?!.*" + exclude + ").*$"
-	}
-	return "^(?!.*" + exclude + ").*" + match
+	return match
 }
 
 func writeBanner(b *strings.Builder, name string) {
