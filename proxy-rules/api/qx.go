@@ -989,6 +989,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "不支持的客户端", http.StatusBadRequest)
 		return
 	}
+	if r.Method == http.MethodDelete {
+		handleDelete(w, r, client)
+		return
+	}
 	if r.Method == http.MethodPost || strings.TrimSpace(r.URL.Query().Get("id")) != "" {
 		handleUpload(w, r, client)
 		return
@@ -1117,6 +1121,26 @@ func clientFrom(r *http.Request) string {
 }
 
 const maxUpload = 2 << 20
+
+func handleDelete(w http.ResponseWriter, r *http.Request, client string) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	path, err := serve.SubPath(client, id)
+	if err != nil {
+		http.Error(w, "链接无效", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	if err := serve.DeleteText(ctx, path); err != nil {
+		status := http.StatusBadGateway
+		if err.Error() == "存储还没配好" {
+			status = http.StatusServiceUnavailable
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
 func handleUpload(w http.ResponseWriter, r *http.Request, client string) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))

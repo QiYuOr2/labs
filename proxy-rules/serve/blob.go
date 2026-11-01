@@ -22,6 +22,7 @@ const blobAPIVersion = "13"
 type TextStore interface {
 	Put(ctx context.Context, path, body string) error
 	Get(ctx context.Context, path string) (string, error)
+	Delete(ctx context.Context, path string) error
 }
 
 var (
@@ -76,6 +77,14 @@ func (m *MemoryStore) Get(_ context.Context, path string) (string, error) {
 		return "", errNotFound
 	}
 	return body, nil
+}
+
+// Delete removes one object. A missing object is already gone.
+func (m *MemoryStore) Delete(_ context.Context, path string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.items, path)
+	return nil
 }
 
 var errNotFound = errors.New("not found")
@@ -151,6 +160,11 @@ func SaveText(ctx context.Context, path, body string) error {
 // LoadTextSaved reads one merged subscription.
 func LoadTextSaved(ctx context.Context, path string) (string, error) {
 	return currentStore().Get(ctx, path)
+}
+
+// DeleteText removes one merged subscription. A missing object is success.
+func DeleteText(ctx context.Context, path string) error {
+	return currentStore().Delete(ctx, path)
 }
 
 // PublicBase is the configured public origin.
@@ -237,6 +251,43 @@ func (blobStore) Get(ctx context.Context, path string) (string, error) {
 		return "", fmt.Errorf("订阅内容过大")
 	}
 	return string(payload), nil
+}
+
+func (blobStore) Delete(ctx context.Context, path string) error {
+	auth, err := blobAuth()
+	if err != nil {
+		return err
+	}
+	if auth.storeID == "" {
+		return fmt.Errorf("存储还没配好")
+	}
+	blobURL := "https://" + auth.storeID + ".private.blob.vercel-storage.com/" + path
+	payload, err := json.Marshal(struct {
+		URLs []string `json:"urls"`
+	}{URLs: []string{blobURL}})
+	if err != nil {
+		return fmt.Errorf("删除失败")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://vercel.com/api/blob/delete", strings.NewReader(string(payload)))
+	if err != nil {
+		return fmt.Errorf("删除失败")
+	}
+	req.Header.Set("Authorization", "Bearer "+auth.token)
+	req.Header.Set("x-api-version", blobAPIVersion)
+	req.Header.Set("content-type", "application/json")
+	if auth.oidc {
+		req.Header.Set("x-vercel-blob-store-id", auth.storeID)
+	}
+	resp, err := blobHTTP.Do(req)
+	if err != nil {
+		return fmt.Errorf("删除失败")
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode == http.StatusNotFound || (resp.StatusCode >= 200 && resp.StatusCode < 300) {
+		return nil
+	}
+	return fmt.Errorf("删除失败")
 }
 
 func blobAuth() (blobCred, error) {

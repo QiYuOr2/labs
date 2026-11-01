@@ -636,3 +636,65 @@ function buildGroup(group, exclude) { return group; }
 		t.Fatalf("type %s", rec.Header().Get("Content-Type"))
 	}
 }
+
+func TestDeleteStored(t *testing.T) {
+	store := serve.NewMemoryStore()
+	serve.SetStore(store)
+	t.Cleanup(func() { serve.SetStore(nil) })
+	const id = "0123456789abcdef0123456789abcdef"
+	if err := store.Put(t.Context(), "subs/qx/"+id, "secret-body"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Put(t.Context(), "subs/sr/"+id, "sr-body"); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/qx?id="+id, nil)
+	rec := httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Fatalf("delete %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := store.Get(t.Context(), "subs/qx/"+id); !serve.IsNotFound(err) {
+		t.Fatalf("qx still stored %v", err)
+	}
+	if got, err := store.Get(t.Context(), "subs/sr/"+id); err != nil || got != "sr-body" {
+		t.Fatalf("sr changed %q %v", got, err)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/qx?id="+id, nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("second %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/qx?id="+id, nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "订阅不存在") {
+		t.Fatalf("get %d %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/sr?id="+id, nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("sr delete %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := store.Get(t.Context(), "subs/sr/"+id); !serve.IsNotFound(err) {
+		t.Fatalf("sr still stored %v", err)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/qx", nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "链接无效") {
+		t.Fatalf("missing %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodDelete, "/api/qx?client=flclash&id=nope", nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad id %d %s", rec.Code, rec.Body.String())
+	}
+}

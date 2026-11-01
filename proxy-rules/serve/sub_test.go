@@ -136,6 +136,15 @@ func TestMemoryStoreOverwrites(t *testing.T) {
 	if _, err := store.Get(nil, "missing"); !IsNotFound(err) {
 		t.Fatalf("err %v", err)
 	}
+	if err := store.Delete(nil, "subs/qx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(nil, "subs/qx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); !IsNotFound(err) {
+		t.Fatalf("deleted %v", err)
+	}
+	if err := store.Delete(nil, "subs/qx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); err != nil {
+		t.Fatal(err)
+	}
 	path, err := SubPath("flclash", "0123456789abcdef0123456789abcdef")
 	if err != nil || path != "subs/flclash/0123456789abcdef0123456789abcdef" {
 		t.Fatalf("%s %v", path, err)

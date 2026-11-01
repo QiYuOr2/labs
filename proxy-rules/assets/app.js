@@ -42,6 +42,7 @@
   var hint = document.querySelector("#hint");
   var link = document.querySelector("#link");
   var copy = document.querySelector("#copy");
+  var remove = document.querySelector("#remove");
   var qr = document.querySelector("#qr");
   var buttons = document.querySelectorAll("[data-client]");
   var current = "qx";
@@ -138,6 +139,50 @@
       done();
     }
   });
+  remove.addEventListener("click", function () {
+    var owned = ownStored(link.textContent);
+    if (!owned) {
+      return;
+    }
+    if (!window.confirm("删除这条配置？")) {
+      return;
+    }
+    var mine = ++ticket;
+    warning.textContent = "正在删除";
+    fetch(origin + "/api/qx?client=" + encodeURIComponent(owned.client) + "&id=" + encodeURIComponent(owned.id), {
+      method: "DELETE"
+    }).then(function (response) {
+      return response.text().then(function (text) {
+        return { ok: response.ok, text: text.trim() };
+      });
+    }).then(function (response) {
+      if (mine !== ticket) {
+        return;
+      }
+      if (!response.ok) {
+        warning.textContent = response.text || "删除失败";
+        return;
+      }
+      forgetId(owned.client, owned.id);
+      if (sameStored(normalize(input.value), owned)) {
+        input.value = "";
+        file.value = "";
+        fileName = "";
+        editing = false;
+        expanded = false;
+        edit.textContent = "编辑";
+        input.classList.remove("editing");
+      }
+      hideResult();
+      render(false);
+      warning.textContent = "已删除";
+    }).catch(function () {
+      if (mine !== ticket) {
+        return;
+      }
+      warning.textContent = "删除失败";
+    });
+  });
 
   render(false);
 
@@ -151,6 +196,14 @@
     var info = paintSheet(raw);
     var config = isConfig(raw);
     make.hidden = !config;
+    var owned = ownStored(raw);
+    if (owned) {
+      ticket += 1;
+      make.hidden = true;
+      warning.textContent = "";
+      showLink(owned.url, "已保存的配置。删除后这条链接失效。");
+      return;
+    }
     if (!config) {
       ticket += 1;
       var problem = "";
@@ -399,6 +452,7 @@
       note.textContent = "链接太长，二维码装不下。复制上面的地址即可。";
       qr.appendChild(note);
     }
+    remove.hidden = !ownStored(ready);
     result.hidden = false;
   }
 
@@ -427,6 +481,58 @@
     return screen(raw) === "";
   }
 
+  function ownStored(raw) {
+    var text = String(raw || "").trim();
+    if (!text || text.indexOf("\n") !== -1 || /\s/.test(text)) {
+      return null;
+    }
+    var parsed;
+    try {
+      parsed = new URL(text);
+    } catch (error) {
+      return null;
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+    var host = parsed.host.toLowerCase();
+    if (host !== window.location.host.toLowerCase() && host !== "proxy.qiyuor2.me" && host !== "proxy-rules.vercel.app") {
+      return null;
+    }
+    var path = parsed.pathname.replace(/\/$/, "");
+    var client = "";
+    if (path === "/api/qx") {
+      client = "qx";
+    } else if (path === "/api/sr") {
+      client = "sr";
+    } else if (path === "/api/flclash") {
+      client = "flclash";
+    } else {
+      return null;
+    }
+    var named = (parsed.searchParams.get("client") || "").toLowerCase();
+    if (named === "sr" || named === "shadowrocket") {
+      client = "sr";
+    } else if (named === "flclash" || named === "clash") {
+      client = "flclash";
+    } else if (named === "qx" || named === "quantumultx") {
+      client = "qx";
+    } else if (named) {
+      return null;
+    }
+    var id = parsed.searchParams.get("id") || "";
+    if (!/^[0-9a-f]{32}$/.test(id)) {
+      return null;
+    }
+    var publicPath = client === "sr" ? "/api/sr" : client === "flclash" ? "/api/flclash" : "/api/qx";
+    return { client: client, id: id, url: parsed.origin + publicPath + "?id=" + id };
+  }
+
+  function sameStored(raw, owned) {
+    var parsed = ownStored(raw);
+    return !!parsed && parsed.client === owned.client && parsed.id === owned.id;
+  }
+
   function storedId(client) {
     try {
       var value = sessionStorage.getItem("rules-id-" + client) || "";
@@ -439,6 +545,14 @@
   function rememberId(client, id) {
     try {
       sessionStorage.setItem("rules-id-" + client, id);
+    } catch (error) {}
+  }
+
+  function forgetId(client, id) {
+    try {
+      if (sessionStorage.getItem("rules-id-" + client) === id) {
+        sessionStorage.removeItem("rules-id-" + client);
+      }
     } catch (error) {}
   }
 

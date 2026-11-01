@@ -46,7 +46,7 @@ GitHub Actions 不能接这个请求。它只在推送后生成静态文件。�
 
 上传认 Quantumult X、Shadowrocket、Clash 三种配置，也认 `ss://`、`vmess://`、`trojan://`、`vless://`、`hysteria2://` 节点列表。同一份文件可以分别生成这三种配置，选哪个按钮就得到哪种。Quantumult X 的节点行写成 `trojan=host:443` 或 `trojan = host:443` 都可以。同一份文件里已经是那种格式时，节点行原样保留；不是时，只转换常见协议。Clash 里的 Reality、gRPC 这些原样留在 Clash 配置里，转成另外两个客户端时会丢掉认不了的节点。
 
-上传后的链接只保存合并结果，不保存原始文件。节点正文不会跟着机场变，规则也不会跟着仓库变，要更新就再传一次。文件里如果只有订阅地址、没有节点正文，Quantumult X 和 Clash 会把那个地址留下来，由客户端自己拉；小火箭没有这种字段，需要节点正文。重开页面后，同一个浏览器会复用上次的链接，再传一次是覆盖，不用改客户端里的地址。
+上传后的链接只保存合并结果，不保存原始文件。节点正文不会跟着机场变，规则也不会跟着仓库变，要更新就再传一次。文件里如果只有订阅地址、没有节点正文，Quantumult X 和 Clash 会把那个地址留下来，由客户端自己拉；小火箭没有这种字段，需要节点正文。重开页面后，同一个浏览器会复用上次的链接，再传一次是覆盖，不用改客户端里的地址。不要的配置在结果旁边点删除，或把旧链接贴回输入框再删除。删除后这条链接失效。忘了链接时，到 Vercel Storage 里按前缀 `subs/` 删除对应文件，不要删整个 Blob store。
 
 1. Vercel 项目 `proxy-rules` 连接这个仓库，Root Directory 是 `proxy-rules`。不要用仓库根目录，`go.mod` 在这一层。
 2. Framework Preset 是 Other。入口是 `api/qx.go`，路由是 `/api/qx`。不要选 Go Server，这里没有 `main.go` 或 `cmd/server/main.go`。
