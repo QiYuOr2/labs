@@ -7,6 +7,6 @@
   },
   "type": "module",
   "dependencies": {
-    "zx": "^7.1.0"
+    "zx": "^8.8.5"
   }
 }

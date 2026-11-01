@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@vueuse/core": "catalog:",
-    "colord": "^2.9.3",
+    "colord": "^2.10.0",
     "vue": "catalog:",
     "vue-router": "^4.2.5",
     "xhook": "catalog:"

@@ -5,9 +5,9 @@
   "description": "ZMKX HID experiment",
   "dependencies": {
     "node-hid": "^3.0.0",
-    "protobufjs": "^7.3.0"
+    "protobufjs": "^7.6.6"
   },
   "devDependencies": {
-    "protobufjs-cli": "^1.1.2"
+    "protobufjs-cli": "^1.3.3"
   }
 }
