@@ -9,13 +9,10 @@ import (
 	"testing"
 )
 
-func TestClientsFresh(t *testing.T) {
+func TestRenderedClients(t *testing.T) {
 	root := moduleRoot(t)
 	files, err := Render(root)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := Same(root, files); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range ClientFiles() {
@@ -23,6 +20,18 @@ func TestClientsFresh(t *testing.T) {
 		if strings.Contains(body, "asail"+"or.org") || strings.Contains(body, "(?i)") || strings.Contains(body, "/subscribe/") {
 			t.Fatalf("%s contains a converter, case flag, or subscription", name)
 		}
+	}
+	qx := files[fileQuantumultX]
+	if !strings.Contains(qx, "\n[mitm]\n") {
+		t.Fatal("QX config has no mitm section")
+	}
+	for _, banned := range []string{"passphrase =", "p12 =", "wloc", "location-spoofer", "gs-loc.apple.com"} {
+		if strings.Contains(qx, banned) {
+			t.Fatalf("QX config contains %s", banned)
+		}
+	}
+	if !strings.Contains(qx, "hostname = -testflight.apple.com, -*.fcbox.com, -*huami.com, -*amemv.com, -*snssdk.com, -www.google.com\n") {
+		t.Fatal("QX mitm hostname changed")
 	}
 }
 

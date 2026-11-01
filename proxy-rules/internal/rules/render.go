@@ -295,6 +295,12 @@ func renderQuantumultX(cfg Config, rewrites []string) string {
 		b.WriteByte('\n')
 	}
 	b.WriteString("\n[rewrite_local]\n")
+	b.WriteString("\n[mitm]\n")
+	b.WriteString("# 这里只保留模块和排除主机名。passphrase、p12 是设备证书，不要写进仓库。\n")
+	b.WriteString("# 不包含定位伪装。远程重写更新后会自行合并自己的 hostname。\n")
+	b.WriteString("skip_validating_cert = true\n")
+	b.WriteString("force_sni_domain_name = false\n")
+	b.WriteString("hostname = -testflight.apple.com, -*.fcbox.com, -*huami.com, -*amemv.com, -*snssdk.com, -www.google.com\n")
 	return b.String()
 }
 
