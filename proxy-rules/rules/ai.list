@@ -1,0 +1,85 @@
+# 主流 AI。只收具体产品域名。
+# 不要把 auth0、stripe、sentry、amazonaws、cloudflare、googleapis、www.bing.com 写进来，
+# 那些域名会被大量无关网站命中，节点一跳就容易触发风控。
+# 国内可直连的 DeepSeek、Kimi、豆包也不放进这组。
+
+# OpenAI / ChatGPT / Sora
+DOMAIN-SUFFIX,openai.com
+DOMAIN-SUFFIX,chatgpt.com
+DOMAIN-SUFFIX,oaistatic.com
+DOMAIN-SUFFIX,oaiusercontent.com
+DOMAIN-SUFFIX,sora.com
+DOMAIN-SUFFIX,ai.com
+DOMAIN,openaicomproductionae4b.blob.core.windows.net
+DOMAIN,production-openaicom-storage.azureedge.net
+DOMAIN,openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net
+DOMAIN-SUFFIX,openaiapi-site.azureedge.net
+DOMAIN-SUFFIX,ai.azure.com
+DOMAIN-SUFFIX,client-api.arkoselabs.com
+
+# Anthropic / Claude
+DOMAIN-SUFFIX,anthropic.com
+DOMAIN-SUFFIX,claude.ai
+DOMAIN-SUFFIX,claude.com
+DOMAIN-SUFFIX,claudeusercontent.com
+
+# Google AI。不要写成 googleapis.com / google.com
+DOMAIN,ai.google.dev
+DOMAIN,aistudio.google.com
+DOMAIN,makersuite.google.com
+DOMAIN,bard.google.com
+DOMAIN,generativelanguage.googleapis.com
+DOMAIN,notebooklm.google.com
+DOMAIN-SUFFIX,gemini.google.com
+DOMAIN-SUFFIX,notebooklm.google
+DOMAIN-SUFFIX,deepmind.com
+DOMAIN-SUFFIX,deepmind.google
+DOMAIN-SUFFIX,generativeai.google
+
+# xAI / Grok
+DOMAIN-SUFFIX,x.ai
+DOMAIN-SUFFIX,grok.com
+DOMAIN,grok.x.ai
+
+# Perplexity
+DOMAIN-SUFFIX,perplexity.ai
+DOMAIN-SUFFIX,perplexity.com
+DOMAIN-SUFFIX,pplx.ai
+
+# Cursor
+DOMAIN-SUFFIX,cursor.com
+DOMAIN-SUFFIX,cursor.sh
+DOMAIN-SUFFIX,cursorapi.com
+DOMAIN-SUFFIX,cursor-cdn.com
+DOMAIN-SUFFIX,cursorvm.com
+
+# Microsoft Copilot / GitHub Copilot。不要写成 bing.com
+DOMAIN,copilot.microsoft.com
+DOMAIN,sydney.bing.com
+DOMAIN,api.githubcopilot.com
+DOMAIN,copilot-proxy.githubusercontent.com
+DOMAIN-SUFFIX,copilot.cloud.microsoft
+DOMAIN-SUFFIX,githubcopilot.com
+
+# Mistral / Groq / OpenRouter / Hugging Face
+DOMAIN-SUFFIX,mistral.ai
+DOMAIN-SUFFIX,groq.com
+DOMAIN,api.groq.com
+DOMAIN,console.groq.com
+DOMAIN,api.together.xyz
+DOMAIN-SUFFIX,openrouter.ai
+DOMAIN-SUFFIX,huggingface.co
+DOMAIN-SUFFIX,hf.co
+
+# Midjourney / Suno / Poe / Character.AI / Meta AI / JetBrains AI / Manus
+DOMAIN-SUFFIX,midjourney.com
+DOMAIN-SUFFIX,suno.com
+DOMAIN-SUFFIX,suno.ai
+DOMAIN-SUFFIX,poe.com
+DOMAIN-SUFFIX,poecdn.net
+DOMAIN-SUFFIX,character.ai
+DOMAIN-SUFFIX,meta.ai
+DOMAIN-SUFFIX,grazie.ai
+DOMAIN-SUFFIX,jetbrains.ai
+DOMAIN-SUFFIX,manus.im
+DOMAIN-SUFFIX,manuscdn.com

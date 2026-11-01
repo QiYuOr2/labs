@@ -1,0 +1,4 @@
+# 只匹配 Cloudflare 自己的域名。不要引入 IP 段，否则挂在 Cloudflare 上的国内站会整段进代理。
+DOMAIN-SUFFIX,cloudflare.com
+DOMAIN-SUFFIX,cloudflare-dns.com
+DOMAIN-SUFFIX,one.one.one.one

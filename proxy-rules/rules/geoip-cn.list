@@ -1,0 +1,3 @@
+# Quantumult X 原生规则。Clash 覆写脚本不读这个文件，它直接写 GEOIP。
+# force-policy 会盖掉这里的 direct，让这条规则进「全球直连」组。
+geoip, cn, direct

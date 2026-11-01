@@ -1,0 +1,10 @@
+# 大文件 CDN。策略组默认直连，需要时再手动改走代理。
+DOMAIN-SUFFIX,dl.google.com
+DOMAIN-SUFFIX,storage.googleapis.com
+DOMAIN-SUFFIX,prod.dl.playstation.net
+DOMAIN,geocdn.microsoft.com
+DOMAIN-SUFFIX,steamcdn-a.akamaihd.net
+DOMAIN-SUFFIX,steampipe.akamaized.net
+DOMAIN-SUFFIX,steamcontent.com
+DOMAIN-KEYWORD,steampipe
+DOMAIN-KEYWORD,steam.cdn

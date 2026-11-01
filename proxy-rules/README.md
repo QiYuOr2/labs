@@ -1,0 +1,91 @@
+# 订阅规则
+
+规则在这个目录里维护。改 `config/all.ini` 或 `rules/` 后直接推送，GitHub Action 用 Go 生成三份配置并提交回同一个分支。不用在本地跑命令。推到 `main` 之后，客户端只填已经生成好的文件链接。没有在线转换，也不会把机场地址发给别人。
+
+一条链接里同时装上机场节点和这些规则做不到。那得有人在你更新时去拉机场。Action 看不到你的订阅，也不该看到。节点用机场原来的订阅，下面的链接只负责策略组和分流。
+
+推到 `main` 之前，这些链接是 404：
+
+- FlClash 覆写脚本：`https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/flclash.js`
+- Quantumult X 配置：`https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/quantumultx.conf`
+- Shadowrocket 配置：`https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/shadowrocket.conf`
+
+这是独立的 Go module，需要 Go 1.24 或更新版本，不要加进 pnpm workspace。
+
+## FlClash
+
+覆写脚本不是节点订阅。节点订阅填机场链接。
+
+1. 配置里添加机场订阅，更新到能看到节点。FlClash 0.8.85 及以上才有覆写脚本。Clash Verge 也认这份 `main(config)` 脚本。
+2. 配置，扩展，脚本，从 URL 导入上面的 `flclash.js`，再关联到这份配置。只保存、不关联，不会生效。
+3. 使用规则模式。脚本会把 `mode` 改成 `rule`。
+4. 「🤖 AI」只有手动的日本、台湾、新加坡、美国、全部节点、DIRECT。没有香港，没有自动选择，没有故障转移，也没有「🚀 默认代理」。
+
+脚本留下机场的节点和 `proxy-providers`，换掉策略组和规则。不改端口，也不打开 `allow-lan`。广告、AI、流媒体名单仍是远程文件，客户端大约每天拉一次。
+
+Clash 不能跑 Quantumult X 的重写脚本。去广告靠分流里的 REJECT。
+
+## Quantumult X
+
+1. 在「节点」里把机场订阅加为节点订阅，不要加为完整配置。
+2. 下载 `quantumultx.conf` 作为配置文件。里面有策略组、远程分流和墨鱼去广告重写。`[server_remote]` 是空的。
+3. 导入后节点如果还在，保持订阅开启。如果没了，再加一次机场节点订阅。不要把机场地址写进这个文件或仓库。
+4. 不要把这份 conf 设成会反复覆盖整份配置的订阅。远程分流和重写自己更新。策略组改了，才需要重新下载 conf。
+5. 重写要生效，打开 MitM 并信任证书。只有去广告，没有会员解锁、倍速或去水印。
+6. 「🤖 AI」手动固定一个日本、台湾、新加坡或美国节点。
+
+`qx/ad-rewrite.conf` 是重写来源，生成配置时会抄进去。也可以把里面每一行单独加到「重写」。`opt-parser=false` 是普通重写，`opt-parser=true` 要打开资源解析器。
+
+## Shadowrocket
+
+1. 首页添加机场订阅。这是节点，不是配置。
+2. 配置从 URL 下载 `shadowrocket.conf`。文件里的 `[Proxy]` 是空的。
+3. 配置里的 `update-url` 就是这条 raw 链接，用来更新规则。更新不会带上机场。如果更新后节点没了，重新添加机场订阅。
+4. 小火箭用不了 Quantumult X 那套重写。广告域名走「🚫 广告拦截」，默认 REJECT。
+
+## 策略组
+
+「🤖 AI」只有手动选择：日本、台湾、新加坡、美国、全部节点、DIRECT。没有香港，没有自动选择，没有故障转移，也没有「🚀 默认代理」。默认代理那一组里面带了自动选择和故障转移，AI 流量再跳进去就会换节点。
+
+名单在 `rules/ai.list`，只收具体产品域名，例如 OpenAI、Claude、Google AI、Grok、Perplexity、Cursor、Copilot、Mistral、Groq、OpenRouter、Hugging Face、Midjourney、Suno、Poe。不收 `auth0`、`stripe`、`sentry`、`amazonaws`、`cloudflare`、`googleapis`、`www.bing.com` 这种会被大量无关网站命中的域名，也不收 DeepSeek、Kimi、豆包。
+
+其他组的默认值：
+
+- 广告拦截默认 REJECT。需要放行时再改成 DIRECT。
+- Apple、国内媒体、国内社交、国内游戏、国内 CDN、下载、全球直连默认 DIRECT。
+- Disney+ 和 TikTok 不放香港，也不放全局自动选择，只留日、台、新、美。
+- PayPal 不放台湾。
+- Bahamut 只有香港和台湾。
+- YouTube、Netflix、Spotify、Telegram、Google 这些可以走默认代理。默认代理里才提供自动选择和故障转移。
+
+地区正则按大小写分开写，不用 `(?i)`。Quantumult X 和 Shadowrocket 会解析失败。
+
+## 去广告
+
+分流里的广告规则顺序是：墨鱼 `Unbreak.list`、ACL4SSR `UnBan.list`，然后才是微软遥测、`BanAD`、`BanProgramAD`、`BanEasyListChina`。修正名单必须在拦截前面，否则登录和支付接口会被误杀。
+
+流媒体在具体服务之后，还有墨鱼 `Streaming.list` 和 ACL4SSR `ProxyMedia.list`。哔哩哔哩写在国内媒体前面，避免被国内名单抢走。
+
+Cats-Team 全量广告名单大约 7MB，默认不内联。确实要开时，去掉 `config/all.ini` 里 `AdRules` 那一行的分号，再重新生成。
+
+墨鱼的开屏、彩云、知乎、YouTube、微博、高德、网易云、闲鱼、哔哩哔哩、百度网盘净化只进 Quantumult X 重写。不要再导入会员解锁、倍速或去水印。
+
+大名单不复制进仓库。`all.ini` 里的 `86400` 是客户端缓存秒数。Action 不负责把 ACL4SSR 或墨鱼的名单再抓一遍，否则仓库会胀，更新也不会比客户端自己拉更快。
+
+## 改规则
+
+改 `config/all.ini` 或 `rules/` 后直接推送。Action 会跑测试和 `check`，再生成 `clients/` 里的三份配置并提交。拉一次远程就能看到新文件。客户端里更新对应链接。
+
+Action 用仓库自带的 `GITHUB_TOKEN` 推送，这个推送不会再次触发 Action。分支如果禁止 Actions 写入，要在仓库设置里允许 GitHub Actions 推送。
+
+只想在推送前本地看一眼：
+
+```shell
+go -C proxy-rules test ./...
+go -C proxy-rules run ./cmd/render
+go -C proxy-rules run ./cmd/check
+```
+
+已经在 `proxy-rules` 目录时，去掉 `-C proxy-rules`。`render -check` 只比较，不写文件。
+
+`check` 会确认策略组都能对上、没有自己引用自己、AI 组仍是固定的那一行、Unbreak 在广告前面、哔哩哔哩在国内媒体前面，以及仓库里没有机场订阅或公共转换地址。

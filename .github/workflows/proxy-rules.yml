@@ -1,0 +1,49 @@
+name: proxy-rules
+
+on:
+  push:
+    paths:
+      - "proxy-rules/**"
+      - ".github/workflows/proxy-rules.yml"
+  pull_request:
+    paths:
+      - "proxy-rules/**"
+      - ".github/workflows/proxy-rules.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: proxy-rules-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: test
+        run: go -C proxy-rules test ./...
+      - name: check
+        run: go -C proxy-rules run ./cmd/check
+      - name: render
+        run: go -C proxy-rules run ./cmd/render
+      - name: commit
+        if: github.event_name != 'pull_request'
+        run: |
+          git add -- proxy-rules/clients
+          if git diff --cached --quiet; then
+            echo "clients unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "更新分流客户端配置"
+          git push

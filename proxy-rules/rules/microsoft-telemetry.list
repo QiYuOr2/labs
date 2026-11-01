@@ -1,0 +1,9 @@
+# Microsoft 遥测。放在普通微软规则前面，走广告拦截。
+DOMAIN-SUFFIX,events.data.microsoft.com
+DOMAIN-SUFFIX,ieonlinews.microsoft.com
+DOMAIN-SUFFIX,vortex.data.microsoft.com
+DOMAIN-SUFFIX,v10.events.data.microsoft.com
+DOMAIN-SUFFIX,self.events.data.microsoft.com
+DOMAIN-SUFFIX,watson.telemetry.microsoft.com
+DOMAIN-SUFFIX,settings-win.data.microsoft.com
+DOMAIN-SUFFIX,telemetry.microsoft.com

@@ -21,6 +21,7 @@ vp run -r build
 - `packages/shared`：共用的 Vue / DOM 工具，`vp pack` 出包
 - `packages/hw`、`packages/spider`、`packages/scripts`：Node 小工具
 - `go/agent`、`preview/`、`snippets/`、`prompts/`：不是 Node 包
+- `proxy-rules/`：自己维护的分流规则。Go 生成 FlClash、Quantumult X、Shadowrocket 配置，用法见目录里的 README
 
 ## 常用命令
 

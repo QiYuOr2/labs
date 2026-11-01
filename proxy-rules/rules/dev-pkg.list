@@ -1,0 +1,22 @@
+# npm / PyPI / Cargo / RubyGems / Go / Maven / Gradle / Homebrew。
+# 国内镜像不要写进来。
+DOMAIN-SUFFIX,npmjs.org
+DOMAIN-SUFFIX,npmjs.com
+DOMAIN-SUFFIX,yarnpkg.com
+DOMAIN-SUFFIX,pypi.org
+DOMAIN-SUFFIX,pythonhosted.org
+DOMAIN-SUFFIX,crates.io
+DOMAIN-SUFFIX,rubygems.org
+DOMAIN-SUFFIX,golang.org
+DOMAIN-SUFFIX,proxy.golang.org
+DOMAIN-SUFFIX,sum.golang.org
+DOMAIN-SUFFIX,maven.org
+DOMAIN-SUFFIX,gradle.org
+DOMAIN-SUFFIX,brew.sh
+DOMAIN-SUFFIX,ghcr.io
+DOMAIN,repo.maven.apache.org
+DOMAIN,registry.yarnpkg.com
+DOMAIN,files.pythonhosted.org
+DOMAIN,static.crates.io
+DOMAIN,index.crates.io
+DOMAIN,services.gradle.org
