@@ -22,6 +22,9 @@ overrides:
   vitest@*: 5.0.5
   'minimatch@>=10 <11': 11.0.3
   'esbuild@>=0.27.3 <0.28.1': 0.28.2
+  'postcss-url>minimatch': 11.0.3
+  'jake>filelist': 2.0.2
+  'protobufjs-cli>glob': 14.0.3
 
 onlyBuiltDependencies:
   - esbuild
