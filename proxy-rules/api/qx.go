@@ -502,7 +502,7 @@ func GetText(ctx context.Context, raw string) (string, error) {
 		},
 	}
 	client := &http.Client{
-		Timeout:   8 * time.Second,
+		Timeout:   12 * time.Second,
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 3 {
@@ -536,6 +536,421 @@ func GetText(ctx context.Context, raw string) (string, error) {
 
 var fetchText = GetText
 
+const expandedFilterBanner = "# 分流名单已展开进 [filter_local]，策略沿用原来的 force-policy。重写仍是远程资源。\n"
+
+const ruleTTL = 6 * time.Hour
+
+// Clash lists and native Quantumult X filters share the typed-rule shape.
+// The policy in the file is ignored. force-policy from the profile wins.
+var supportedRuleTypes = map[string]string{
+	"DOMAIN":          "HOST",
+	"HOST":            "HOST",
+	"DOMAIN-SUFFIX":   "HOST-SUFFIX",
+	"HOST-SUFFIX":     "HOST-SUFFIX",
+	"DOMAIN-KEYWORD":  "HOST-KEYWORD",
+	"HOST-KEYWORD":    "HOST-KEYWORD",
+	"DOMAIN-WILDCARD": "HOST-WILDCARD",
+	"HOST-WILDCARD":   "HOST-WILDCARD",
+	"IP-CIDR":         "IP-CIDR",
+	"IP-CIDR6":        "IP6-CIDR",
+	"IP6-CIDR":        "IP6-CIDR",
+	"GEOIP":           "GEOIP",
+	"USER-AGENT":      "USER-AGENT",
+}
+
+var skippedRuleTypes = map[string]struct{}{
+	"PROCESS-NAME": {},
+	"PROCESS-PATH": {},
+	"PACKAGE-NAME": {},
+	"DOMAIN-REGEX": {},
+	"URL-REGEX":    {},
+	"AND":          {},
+	"OR":           {},
+	"NOT":          {},
+	"MATCH":        {},
+	"FINAL":        {},
+	"RULE-SET":     {},
+	"DST-PORT":     {},
+	"SRC-PORT":     {},
+	"IN-PORT":      {},
+	"SRC-IP-CIDR":  {},
+	"IP-ASN":       {},
+	"NETWORK":      {},
+	"PROTOCOL":     {},
+	"UID":          {},
+}
+
+const (
+	ruleSkip = iota
+	ruleOK
+	ruleUnknown
+)
+
+type remoteRef struct {
+	url    string
+	policy string
+}
+
+type ruleItem struct {
+	body string
+	at   time.Time
+}
+
+var (
+	ruleMu    sync.Mutex
+	ruleItems map[string]ruleItem
+	ruleWait  map[string]chan struct{}
+)
+
+func resetRuleCache() {
+	ruleMu.Lock()
+	ruleItems = nil
+	ruleWait = nil
+	ruleMu.Unlock()
+}
+
+// expandFilters downloads [filter_remote] and writes Quantumult X rules into [filter_local].
+// One failed list keeps the original remote section, so a gap cannot reorder the rest.
+func expandFilters(ctx context.Context, config string) string {
+	sections := splitSections(config)
+	if sections == nil {
+		return config
+	}
+	if _, ok := sections["filter_remote"]; !ok {
+		return config
+	}
+	if _, ok := sections["filter_local"]; !ok {
+		return config
+	}
+	refs, ok := parseRemoteRefs(sections["filter_remote"])
+	if !ok || len(refs) == 0 {
+		return config
+	}
+	loaded := make([][]string, len(refs))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 16)
+	for i, ref := range refs {
+		wg.Add(1)
+		go func(i int, ref remoteRef) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				return
+			}
+			body, err := loadRule(ctx, ref.url)
+			if err != nil {
+				return
+			}
+			rules, good := convertRuleList(body, ref.policy)
+			if !good {
+				forgetRule(ref.url)
+				return
+			}
+			loaded[i] = rules
+		}(i, ref)
+	}
+	wg.Wait()
+	for i, ref := range refs {
+		if loaded[i] != nil || ctx.Err() != nil {
+			continue
+		}
+		body, err := loadRule(ctx, ref.url)
+		if err != nil {
+			continue
+		}
+		rules, good := convertRuleList(body, ref.policy)
+		if !good {
+			forgetRule(ref.url)
+			continue
+		}
+		loaded[i] = rules
+	}
+	var b strings.Builder
+	seen := make(map[string]struct{})
+	for i := range refs {
+		if loaded[i] == nil {
+			return config
+		}
+		for _, line := range loaded[i] {
+			if _, ok := seen[line]; ok {
+				continue
+			}
+			seen[line] = struct{}{}
+			b.WriteString(line)
+			b.WriteByte('\n')
+		}
+	}
+	for _, line := range sections["filter_local"] {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	body := strings.TrimRight(b.String(), "\n")
+	if len(body) > 3_500_000 {
+		return config
+	}
+	updated, err := replaceSection(config, "filter_remote", "")
+	if err != nil {
+		return config
+	}
+	updated, err = replaceSection(updated, "filter_local", body)
+	if err != nil {
+		return config
+	}
+	if !strings.HasPrefix(updated, expandedFilterBanner) {
+		updated = expandedFilterBanner + updated
+	}
+	return updated
+}
+
+func parseRemoteRefs(lines []string) ([]remoteRef, bool) {
+	var refs []remoteRef
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+		ref, enabled, ok := parseRemoteRef(line)
+		if !enabled {
+			continue
+		}
+		if !ok {
+			return nil, false
+		}
+		refs = append(refs, ref)
+	}
+	return refs, true
+}
+
+func parseRemoteRef(line string) (remoteRef, bool, bool) {
+	parts := splitCSV(line)
+	if len(parts) == 0 || (!strings.HasPrefix(parts[0], "https://") && !strings.HasPrefix(parts[0], "http://")) {
+		return remoteRef{}, true, false
+	}
+	ref := remoteRef{url: parts[0]}
+	enabled := true
+	for _, part := range parts[1:] {
+		key, value, found := strings.Cut(part, "=")
+		if !found {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "force-policy":
+			ref.policy = strings.TrimSpace(value)
+		case "enabled":
+			enabled = strings.EqualFold(strings.TrimSpace(value), "true")
+		}
+	}
+	if ref.policy == "" {
+		return ref, enabled, false
+	}
+	return ref, enabled, true
+}
+
+func splitCSV(line string) []string {
+	raw := strings.Split(line, ",")
+	out := make([]string, 0, len(raw))
+	for _, part := range raw {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func loadRule(ctx context.Context, raw string) (string, error) {
+	if body, ok := cachedRule(raw); ok {
+		return body, nil
+	}
+	ruleMu.Lock()
+	if body, ok := cachedRuleLocked(raw); ok {
+		ruleMu.Unlock()
+		return body, nil
+	}
+	if ruleWait == nil {
+		ruleWait = make(map[string]chan struct{})
+	}
+	if wait, ok := ruleWait[raw]; ok {
+		ruleMu.Unlock()
+		select {
+		case <-wait:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+		if body, ok := cachedRule(raw); ok {
+			return body, nil
+		}
+		return fetchRule(ctx, raw)
+	}
+	wait := make(chan struct{})
+	ruleWait[raw] = wait
+	ruleMu.Unlock()
+
+	body, err := fetchRule(ctx, raw)
+	ruleMu.Lock()
+	delete(ruleWait, raw)
+	close(wait)
+	ruleMu.Unlock()
+	return body, err
+}
+
+func fetchRule(ctx context.Context, raw string) (string, error) {
+	body, err := fetchText(ctx, raw)
+	if err != nil {
+		body, err = fetchText(ctx, raw)
+	}
+	if err != nil {
+		if stale, ok := staleRule(raw); ok {
+			return stale, nil
+		}
+		return "", err
+	}
+	ruleMu.Lock()
+	if ruleItems == nil {
+		ruleItems = make(map[string]ruleItem)
+	}
+	ruleItems[raw] = ruleItem{body: body, at: time.Now()}
+	ruleMu.Unlock()
+	return body, nil
+}
+
+func cachedRule(raw string) (string, bool) {
+	ruleMu.Lock()
+	defer ruleMu.Unlock()
+	return cachedRuleLocked(raw)
+}
+
+func cachedRuleLocked(raw string) (string, bool) {
+	item, ok := ruleItems[raw]
+	if !ok || time.Since(item.at) >= ruleTTL {
+		return "", false
+	}
+	return item.body, true
+}
+
+func staleRule(raw string) (string, bool) {
+	ruleMu.Lock()
+	defer ruleMu.Unlock()
+	item, ok := ruleItems[raw]
+	if !ok || item.body == "" {
+		return "", false
+	}
+	return item.body, true
+}
+
+func forgetRule(raw string) {
+	ruleMu.Lock()
+	delete(ruleItems, raw)
+	ruleMu.Unlock()
+}
+
+func convertRuleList(body, policy string) ([]string, bool) {
+	if badRuleDocument(body) || strings.TrimSpace(policy) == "" {
+		return nil, false
+	}
+	var rules []string
+	unknown := 0
+	seen := make(map[string]struct{})
+	for line := range strings.SplitSeq(normalize(body), "\n") {
+		out, status := classifyRule(line, policy)
+		switch status {
+		case ruleOK:
+			if _, ok := seen[out]; ok {
+				continue
+			}
+			seen[out] = struct{}{}
+			rules = append(rules, out)
+		case ruleUnknown:
+			unknown++
+		}
+	}
+	if len(rules) == 0 || unknown > len(rules) {
+		return nil, false
+	}
+	return rules, true
+}
+
+func badRuleDocument(body string) bool {
+	head := strings.ToLower(strings.TrimSpace(body))
+	if len(head) > 240 {
+		head = head[:240]
+	}
+	return strings.Contains(head, "<!doctype") || strings.Contains(head, "<html") || strings.HasPrefix(head, "{")
+}
+
+func classifyRule(line, policy string) (string, int) {
+	line = stripInlineComment(line)
+	if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "//") || strings.HasPrefix(line, "!") || line == "payload:" {
+		return "", ruleSkip
+	}
+	parts := splitCSV(line)
+	if len(parts) < 2 {
+		return "", ruleSkip
+	}
+	kind := strings.ToUpper(parts[0])
+	if _, skip := skippedRuleTypes[kind]; skip {
+		return "", ruleSkip
+	}
+	mapped, ok := supportedRuleTypes[kind]
+	if !ok {
+		return "", ruleUnknown
+	}
+	pattern := parts[1]
+	noResolve := false
+	for _, extra := range parts[2:] {
+		if strings.EqualFold(extra, "no-resolve") {
+			noResolve = true
+		}
+	}
+	if pattern == "" || strings.ContainsAny(pattern, " \t[]") || strings.Contains(pattern, "://") || len(pattern) > 512 {
+		return "", ruleUnknown
+	}
+	switch mapped {
+	case "IP-CIDR", "IP6-CIDR":
+		_, network, err := net.ParseCIDR(pattern)
+		if err != nil {
+			return "", ruleUnknown
+		}
+		pattern = network.String()
+	case "GEOIP":
+		if len(pattern) != 2 {
+			return "", ruleUnknown
+		}
+		pattern = strings.ToUpper(pattern)
+		noResolve = false
+	case "HOST", "HOST-SUFFIX", "HOST-WILDCARD":
+		pattern = strings.TrimSuffix(pattern, ".")
+		if pattern == "" {
+			return "", ruleUnknown
+		}
+		noResolve = false
+	default:
+		noResolve = false
+	}
+	out := mapped + "," + pattern + "," + policy
+	if noResolve {
+		out += ",no-resolve"
+	}
+	return out, ruleOK
+}
+
+func stripInlineComment(line string) string {
+	line = strings.TrimSpace(line)
+	if i := strings.Index(line, " #"); i >= 0 {
+		line = line[:i]
+	}
+	if i := strings.Index(line, " //"); i >= 0 {
+		line = line[:i]
+	}
+	return strings.TrimSpace(line)
+}
+
 const defaultProfileURL = "https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/quantumultx.conf"
 
 // Handler is the Vercel function entry. Quantumult X calls /api/qx?url=...
@@ -553,19 +968,36 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "订阅链接无效", http.StatusBadRequest)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 40*time.Second)
 	defer cancel()
-	base, err := profile(ctx)
-	if err != nil {
+	type fetched struct {
+		body string
+		err  error
+	}
+	baseCh := make(chan fetched, 1)
+	subCh := make(chan fetched, 1)
+	go func() {
+		body, err := profile(ctx)
+		if err == nil {
+			body = expandFilters(ctx, body)
+		}
+		baseCh <- fetched{body, err}
+	}()
+	go func() {
+		body, err := fetchText(ctx, raw)
+		subCh <- fetched{body, err}
+	}()
+	baseRes := <-baseCh
+	subRes := <-subCh
+	if baseRes.err != nil {
 		http.Error(w, "规则配置下载失败", http.StatusBadGateway)
 		return
 	}
-	subscription, err := fetchText(ctx, raw)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+	if subRes.err != nil {
+		http.Error(w, subRes.err.Error(), http.StatusBadGateway)
 		return
 	}
-	merged, err := MergeQuantumultX(base, subscription, raw)
+	merged, err := MergeQuantumultX(baseRes.body, subRes.body, raw)
 	if err != nil {
 		http.Error(w, "合并失败", http.StatusBadGateway)
 		return

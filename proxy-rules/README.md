@@ -46,8 +46,11 @@ GitHub Actions 不能接这个请求。它只在推送后生成静态文件。�
 
 `https://proxy-rules.vercel.app/api/qx?url=<编码后的订阅链接>`
 
-服务拉取已生成的 `quantumultx.conf`，再拉取 `url`。只填入订阅里的 DNS 和节点。策略组、分流、重写和证书段仍用仓库里的。
+服务拉取已生成的 `quantumultx.conf`，再拉取 `url`。只填入订阅里的 DNS 和节点。策略组和证书段仍用仓库里的。分流名单会展开进同一份配置。重写仍是远程资源。
 
+- `[filter_remote]` 的名单会在返回前下载，并按原顺序写入 `[filter_local]`。`DOMAIN-SUFFIX` 转成 `HOST-SUFFIX`，`IP-CIDR6` 转成 `IP6-CIDR`，策略用原来的 `force-policy`。
+- 任一名单下载失败或内容不是规则时，这次不展开，仍返回原来的远程分流，避免打乱先后顺序。
+- 重写不展开。脚本和 hostname 继续走 `[rewrite_remote]`。
 - 订阅是 Quantumult X 配置时，采用其中的 `[dns]`、`[server_local]` 和 `[server_remote]`。
 - 订阅是 Clash，而且没有 Quantumult X 节点行时，只转换 `dns` 里的 IP 和 DoH。节点写不进 Quantumult X 的行内格式，因此把原订阅链接放进 `[server_remote]`，节点仍由 Quantumult X 更新。
 - 订阅里没有 DNS 时，`[dns]` 保持空白，Quantumult X 使用自己的默认 DNS。
