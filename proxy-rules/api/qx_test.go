@@ -84,7 +84,11 @@ hostname = evil.example
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"[dns]\nno-ipv6\nserver=223.5.5.5\n",
+		"no-system",
+		"no-ipv6",
+		"prefer-doh3",
+		"doh-server=https://dns.alidns.com/dns-query,https://doh.pub/dns-query",
+		"server=223.5.5.5",
 		"static=🤖 AI, direct",
 		"shadowsocks=1.2.3.4:443, method=aes-128-gcm, password=secret, udp-relay=true, tag=日本 1",
 		"https://example.com/nodes, tag=extra, update-interval=86400, opt-parser=true, enabled=true",
@@ -166,6 +170,11 @@ func TestMergeRealProfile(t *testing.T) {
 	if !strings.Contains(got, "server=119.29.29.29") || !strings.Contains(got, "static=AI,") {
 		t.Fatalf("real profile merge changed shape\n%s", got[:400])
 	}
+	for _, want := range []string{"no-system", "prefer-doh3", "fallback_udp_policy=reject", "doh-server=https://dns.alidns.com/dns-query,https://doh.pub/dns-query"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("real profile dropped %s", want)
+		}
+	}
 	if strings.Contains(got, "passphrase =") || strings.Contains(got, "p12 =") {
 		t.Fatal("certificate material appeared")
 	}
@@ -233,6 +242,12 @@ func TestHandlerMerge(t *testing.T) {
 	}
 	if !strings.Contains(body, "HOST-SUFFIX,example.com,🎯 全球直连") || !strings.Contains(body, "IP-CIDR,1.2.3.0/24,🎯 全球直连,no-resolve") {
 		t.Fatalf("rules were not inlined:\n%s", body)
+	}
+	stunAt := strings.Index(body, "host-keyword, stun, 默认代理")
+	hostAt := strings.Index(body, "HOST-SUFFIX,example.com,🎯 全球直连")
+	finalAt := strings.Index(body, "final, 🐟 漏网之鱼")
+	if stunAt < 0 || hostAt < 0 || finalAt < 0 || stunAt > hostAt || hostAt > finalAt {
+		t.Fatalf("stun filter was not kept ahead of remote rules:\n%s", body)
 	}
 	if strings.Contains(body, "https://example.com/rules.list") || strings.Contains(body, "PROCESS-NAME") {
 		t.Fatalf("remote filter or skipped rule remained:\n%s", body)
@@ -793,4 +808,28 @@ func policyLine(t *testing.T, policy, prefix string) string {
 	}
 	t.Fatalf("missing %s\n%s", prefix, policy)
 	return ""
+}
+
+func TestMergeQuantumultXDropsSystemDNS(t *testing.T) {
+	subscription := "[dns]\nserver=/example.com/system\nserver=system\nserver=223.5.5.5\n[server_local]\ntrojan=example.com:443, password=pwd, tag=日本\n"
+	got, err := MergeQuantumultX(baseProfile, subscription, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"no-system",
+		"prefer-doh3",
+		"doh-server=https://dns.alidns.com/dns-query,https://doh.pub/dns-query",
+		"server=223.5.5.5",
+		"fallback_udp_policy=reject",
+		"dns_exclusion_list = ",
+		"*.cmpassport.com",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %s\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "/system") || strings.Contains(got, "server=system") {
+		t.Fatalf("system resolver kept\n%s", got)
+	}
 }

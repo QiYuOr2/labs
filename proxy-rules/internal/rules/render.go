@@ -345,7 +345,16 @@ func renderQuantumultX(cfg Config, rewrites []string) string {
 	// reject is the documented default; write it so nobody changes it to direct,
 	// which would let WebRTC/STUN leave from the real address.
 	b.WriteString("fallback_udp_policy=reject\n")
-	b.WriteString("\n[dns]\n\n[policy]\n")
+	b.WriteString("dns_exclusion_list = " + QuantumultXDNSExclusion() + "\n")
+	// sample.conf drops udp_drop_list in the tunnel, before filter rules.
+	// Putting STUN there would stop host-keyword from sending it to 默认代理.
+	b.WriteString("# 不设置 udp_drop_list=STUN：它在过滤器之前丢包，STUN 就到不了默认代理。\n")
+	b.WriteString("\n[dns]\n")
+	for _, line := range QuantumultXDNS() {
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	b.WriteString("\n[policy]\n")
 	for _, group := range cfg.Groups {
 		b.WriteString(qxPolicy(group))
 		b.WriteByte('\n')
@@ -366,6 +375,10 @@ func renderQuantumultX(cfg Config, rewrites []string) string {
 		}
 	}
 	b.WriteString("\n[filter_local]\n")
+	for _, line := range QuantumultXStunFilters() {
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
 	if finalGroup != "" {
 		fmt.Fprintf(&b, "final, %s\n", finalGroup)
 	}
@@ -443,7 +456,10 @@ func renderShadowrocket(cfg Config) string {
 	b.WriteString("\n[General]\n")
 	b.WriteString("bypass-system = true\n")
 	b.WriteString("skip-proxy = 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 127.0.0.1, localhost, *.local\n")
-	b.WriteString("dns-server = system\n")
+	for _, line := range ShadowrocketLeakGeneral() {
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
 	fmt.Fprintf(&b, "update-url = %s%s\n", rawBase, fileShadowrocket)
 	b.WriteString("\n[Proxy]\n\n[Proxy Group]\n")
 	for _, group := range cfg.Groups {
@@ -451,6 +467,10 @@ func renderShadowrocket(cfg Config) string {
 		b.WriteByte('\n')
 	}
 	b.WriteString("\n[Rule]\n")
+	for _, line := range ShadowrocketStunRules() {
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
 	for _, rule := range cfg.Rules {
 		switch rule.Kind {
 		case "url":

@@ -581,3 +581,51 @@ func TestNativeAnyTLSAndUntouchedTypes(t *testing.T) {
 		t.Fatalf("got %v\nwant %v", local, want)
 	}
 }
+
+func TestShadowrocketUDPDefault(t *testing.T) {
+	native := "[Proxy]\n" +
+		"Plain = ss, example.com, 443, encrypt-method=aes-128-gcm, password=pwd\n" +
+		"Off = trojan, example.com, 443, password=pwd, udp-relay=false\n" +
+		"Web = http, example.com, 80, user, pwd\n" +
+		"HY = hysteria2, example.com, 443, password=pwd\n" +
+		"Keep = hysteria2, example.com, 443, password=pwd, udp=0\n"
+	proxies, _ := NodesForShadowrocket(native)
+	got := map[string]string{}
+	for _, line := range proxies {
+		name, _, _ := strings.Cut(line, "=")
+		got[strings.TrimSpace(name)] = line
+	}
+	if !strings.Contains(got["Plain"], "udp-relay=true") {
+		t.Fatalf("unset ss: %s", got["Plain"])
+	}
+	if !strings.Contains(got["HY"], "udp-relay=true") {
+		t.Fatalf("unset hysteria2: %s", got["HY"])
+	}
+	if strings.Contains(got["Off"], "udp-relay=true") || !strings.Contains(got["Off"], "udp-relay=false") {
+		t.Fatalf("explicit off: %s", got["Off"])
+	}
+	if strings.Contains(got["Web"], "udp-relay") {
+		t.Fatalf("http gained udp: %s", got["Web"])
+	}
+	if strings.Contains(got["Keep"], "udp-relay") || !strings.Contains(got["Keep"], "udp=0") {
+		t.Fatalf("udp=0 rewritten: %s", got["Keep"])
+	}
+
+	clash := "proxies:\n" +
+		"  - {name: Off, type: hysteria2, server: example.com, port: 443, password: pwd, udp: false}\n" +
+		"  - {name: Web, type: http, server: example.com, port: 80}\n" +
+		"  - {name: Sock, type: socks5, server: example.com, port: 1080}\n"
+	converted, _ := NodesForShadowrocket(clash)
+	foundOff := false
+	for _, line := range converted {
+		if strings.Contains(line, "udp-relay") {
+			t.Fatalf("explicit off or non-udp type gained relay: %s", line)
+		}
+		if strings.HasPrefix(line, "Off =") {
+			foundOff = true
+		}
+	}
+	if !foundOff {
+		t.Fatalf("hysteria2 with udp false was dropped: %v", converted)
+	}
+}

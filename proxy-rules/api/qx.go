@@ -19,6 +19,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/QiYuOr2/labs/proxy-rules/internal/rules"
 	"github.com/QiYuOr2/labs/proxy-rules/serve"
 )
 
@@ -38,6 +39,7 @@ func MergeQuantumultX(base, subscription, sourceURL string) (string, error) {
 	if len(dns) == 0 {
 		dns = clashDNS(normalize(subscription))
 	}
+	dns = mergeQXDNS(dns)
 	if len(local) == 0 && len(remote) == 0 {
 		if strings.TrimSpace(sourceURL) == "" {
 			return "", fmt.Errorf("没有节点")
@@ -59,12 +61,9 @@ func MergeQuantumultX(base, subscription, sourceURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(remote) > 0 {
-		general := append(sectionLines(merged, "general"), "resource_parser_url="+parserURL)
-		merged, err = replaceSection(merged, "general", strings.Join(general, "\n"))
-		if err != nil {
-			return "", err
-		}
+	merged, err = ensureQXGeneral(merged, len(remote) > 0)
+	if err != nil {
+		return "", err
 	}
 	// List matching node names in each region policy. Quantumult X leaves a
 	// server-tag-regex group empty when the pattern does not fit the whole tag,
@@ -255,6 +254,123 @@ func isHeader(line string) bool {
 		}
 	}
 	return true
+}
+
+// mergeQXDNS keeps the leak block in front of a subscription's DNS lines.
+// server=/example.com/system and server=system are dropped. no-system stays.
+func mergeQXDNS(lines []string) []string {
+	var out []string
+	seen := map[string]struct{}{}
+	add := func(line string) {
+		line = strings.TrimSpace(line)
+		if line == "" || qxDNSUsesSystem(line) {
+			return
+		}
+		key := strings.ToLower(line)
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, line)
+	}
+	for _, line := range rules.QuantumultXDNS() {
+		add(line)
+	}
+	for _, line := range lines {
+		add(line)
+	}
+	return out
+}
+
+func qxDNSUsesSystem(line string) bool {
+	lower := strings.ToLower(strings.TrimSpace(line))
+	if lower == "no-system" {
+		return false
+	}
+	return strings.HasSuffix(lower, "=system") || strings.HasSuffix(lower, "/system")
+}
+
+// ensureQXGeneral adds fallback_udp_policy and dns_exclusion_list when the
+// base does not already set them. An existing value is left as it is.
+// withParser rewrites resource_parser_url once, matching the remote-node path.
+func ensureQXGeneral(config string, withParser bool) (string, error) {
+	if !withParser && !qxGeneralMissingLeak(config) {
+		return config, nil
+	}
+	parsers := qxParserLines(config)
+	general := ensureQXGeneralLines(sectionLines(config, "general"))
+	if withParser {
+		general = append(general, "resource_parser_url="+parserURL)
+	} else {
+		general = append(general, parsers...)
+	}
+	return replaceSection(config, "general", strings.Join(general, "\n"))
+}
+
+func ensureQXGeneralLines(lines []string) []string {
+	hasFallback := false
+	hasExclusion := false
+	for _, line := range lines {
+		switch qxOptionKey(line) {
+		case "fallback_udp_policy":
+			hasFallback = true
+		case "dns_exclusion_list":
+			hasExclusion = true
+		}
+	}
+	if !hasFallback {
+		lines = append(lines, "fallback_udp_policy=reject")
+	}
+	if !hasExclusion {
+		lines = append(lines, "dns_exclusion_list = "+rules.QuantumultXDNSExclusion())
+	}
+	return lines
+}
+
+func qxGeneralMissingLeak(config string) bool {
+	hasFallback := false
+	hasExclusion := false
+	for _, line := range sectionLines(config, "general") {
+		switch qxOptionKey(line) {
+		case "fallback_udp_policy":
+			hasFallback = true
+		case "dns_exclusion_list":
+			hasExclusion = true
+		}
+	}
+	return !hasFallback || !hasExclusion
+}
+
+func qxParserLines(config string) []string {
+	header := "[general]"
+	var out []string
+	in := false
+	for _, line := range strings.Split(config, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if isHeader(trimmed) {
+			in = strings.EqualFold(trimmed, header)
+			continue
+		}
+		if !in || trimmed == "" {
+			continue
+		}
+		if strings.EqualFold(qxOptionKey(trimmed), "resource_parser_url") {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func qxOptionKey(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "//") {
+		return ""
+	}
+	key, _, ok := strings.Cut(trimmed, "=")
+	if !ok {
+		return strings.ToLower(trimmed)
+	}
+	return strings.ToLower(strings.TrimSpace(key))
 }
 
 func filterDNS(lines []string) []string {
@@ -848,28 +964,44 @@ func expandFilters(ctx context.Context, config string) string {
 		}
 		loaded[i] = rules
 	}
-	var b strings.Builder
-	seen := make(map[string]struct{})
-	for i := range refs {
-		if loaded[i] == nil {
-			return config
-		}
-		for _, line := range loaded[i] {
-			if _, ok := seen[line]; ok {
-				continue
-			}
-			seen[line] = struct{}{}
-			b.WriteString(line)
-			b.WriteByte('\n')
-		}
-	}
+	var head, tail []string
 	for _, line := range sections["filter_local"] {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
+		if isQXFinal(line) {
+			tail = append(tail, line)
+			continue
+		}
+		head = append(head, line)
+	}
+	if !qxHasStun(head) {
+		head = append(append([]string{}, rules.QuantumultXStunFilters()...), head...)
+	}
+	var b strings.Builder
+	seen := make(map[string]struct{})
+	write := func(line string) {
+		if _, ok := seen[line]; ok {
+			return
+		}
+		seen[line] = struct{}{}
 		b.WriteString(line)
 		b.WriteByte('\n')
+	}
+	for _, line := range head {
+		write(line)
+	}
+	for i := range refs {
+		if loaded[i] == nil {
+			return config
+		}
+		for _, line := range loaded[i] {
+			write(line)
+		}
+	}
+	for _, line := range tail {
+		write(line)
 	}
 	body := strings.TrimRight(b.String(), "\n")
 	if len(body) > 3_500_000 {
@@ -887,6 +1019,20 @@ func expandFilters(ctx context.Context, config string) string {
 		updated = expandedFilterBanner + updated
 	}
 	return updated
+}
+
+func isQXFinal(line string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "final,")
+}
+
+func qxHasStun(lines []string) bool {
+	for _, line := range lines {
+		parts := splitCSV(line)
+		if len(parts) >= 2 && strings.EqualFold(parts[0], "host-keyword") && strings.EqualFold(parts[1], "stun") {
+			return true
+		}
+	}
+	return false
 }
 
 func parseRemoteRefs(lines []string) ([]remoteRef, bool) {
