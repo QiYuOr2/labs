@@ -266,6 +266,142 @@ func TestFlClashScript(t *testing.T) {
 	}
 }
 
+func TestFlClashLeakFixes(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Fatal("node is required")
+	}
+	root := moduleRoot(t)
+	files, err := Render(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := files[fileFlClash]
+	if strings.Count(script, "function applyLeakFixes") != 1 || !strings.Contains(script, "applyLeakFixes(config);") {
+		t.Fatal("static script does not apply leak fixes")
+	}
+	input := map[string]any{
+		"mode":      "global",
+		"allow-lan": true,
+		"ipv6":      true,
+		"dns": map[string]any{
+			"enable":        false,
+			"enhanced-mode": "redir-host",
+			"nameserver":    []string{"system"},
+		},
+		"tun": map[string]any{
+			"enable": false,
+			"device": "utun9",
+		},
+		"proxies": []any{
+			map[string]any{"name": "Unset", "type": "ss"},
+			map[string]any{"name": "Off", "type": "vmess", "udp": false},
+			map[string]any{"name": "Web", "type": "http"},
+			map[string]any{"name": "Plain", "server": "example.com"},
+		},
+		"proxy-providers": map[string]any{
+			"Airport": map[string]any{
+				"type":     "http",
+				"url":      "https://example.com/nodes",
+				"override": map[string]any{"additional-prefix": ""},
+				"proxies": []any{
+					map[string]any{"name": "P", "type": "ss"},
+					map[string]any{"name": "Q", "type": "vmess", "udp": false},
+				},
+			},
+		},
+		"rules": []string{"MATCH,OLD"},
+	}
+	out := runScript(t, script, input)
+	again := runScript(t, script, out)
+	assertLeakFixes(t, out)
+	assertLeakFixes(t, again)
+	if len(again["rules"].([]any)) != len(out["rules"].([]any)) {
+		t.Fatal("running the script twice duplicated stun rules")
+	}
+}
+
+func assertLeakFixes(t *testing.T, out map[string]any) {
+	t.Helper()
+	if out["allow-lan"] != true {
+		t.Fatal("script changed allow-lan")
+	}
+	if out["ipv6"] != false || out["mode"] != "rule" {
+		t.Fatalf("ipv6 %v mode %v", out["ipv6"], out["mode"])
+	}
+	dns := out["dns"].(map[string]any)
+	if dns["enhanced-mode"] != "fake-ip" || dns["fake-ip-range"] != "198.18.0.1/16" || dns["respect-rules"] != true {
+		t.Fatalf("dns %#v", dns)
+	}
+	raw, err := json.Marshal(dns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"system"`) || strings.Contains(string(raw), "dhcp://") {
+		t.Fatalf("dns still uses the system resolver: %s", raw)
+	}
+	filters := dns["fake-ip-filter"].([]any)
+	for _, filter := range filters {
+		if strings.Contains(strings.ToLower(filter.(string)), "stun") {
+			t.Fatalf("fake-ip-filter %v", filters)
+		}
+	}
+	tun := out["tun"].(map[string]any)
+	if tun["enable"] != true || tun["stack"] != "mixed" || tun["dns-mode"] != "hijack" || tun["device"] != "utun9" {
+		t.Fatalf("tun %#v", tun)
+	}
+	hijack := tun["dns-hijack"].([]any)
+	if len(hijack) != 2 || hijack[0] != "any:53" || hijack[1] != "tcp://any:53" {
+		t.Fatalf("dns-hijack %#v", hijack)
+	}
+	proxies := map[string]map[string]any{}
+	for _, item := range out["proxies"].([]any) {
+		proxy := item.(map[string]any)
+		proxies[proxy["name"].(string)] = proxy
+	}
+	if proxies["Unset"]["udp"] != true || proxies["Off"]["udp"] != false {
+		t.Fatalf("proxies %#v", proxies)
+	}
+	if _, ok := proxies["Web"]["udp"]; ok {
+		t.Fatalf("http gained udp %#v", proxies["Web"])
+	}
+	if _, ok := proxies["Plain"]["udp"]; ok {
+		t.Fatalf("typeless proxy gained udp %#v", proxies["Plain"])
+	}
+	providers := out["proxy-providers"].(map[string]any)
+	airport := providers["Airport"].(map[string]any)
+	override := airport["override"].(map[string]any)
+	if _, ok := override["udp"]; ok {
+		t.Fatalf("provider override %#v", override)
+	}
+	var providerSS, providerOff bool
+	for _, item := range airport["proxies"].([]any) {
+		proxy := item.(map[string]any)
+		switch proxy["name"] {
+		case "P":
+			providerSS = proxy["udp"] == true
+		case "Q":
+			providerOff = proxy["udp"] == false
+		}
+	}
+	if !providerSS || !providerOff {
+		t.Fatalf("provider proxies %#v", airport["proxies"])
+	}
+	rules := out["rules"].([]any)
+	want := ClashStunRules()
+	if len(rules) < len(want) {
+		t.Fatalf("rules %#v", rules)
+	}
+	for i, rule := range want {
+		if rules[i] != rule {
+			t.Fatalf("rule %d = %v, want %s", i, rules[i], rule)
+		}
+	}
+	last := rules[len(rules)-1].(string)
+	if !strings.HasPrefix(last, "MATCH,") || strings.Contains(last, "OLD") {
+		t.Fatalf("last rule = %s", last)
+	}
+}
+
 func srPolicyLine(text, name string) string {
 	prefix := name + " = "
 	for _, line := range strings.Split(text, "\n") {

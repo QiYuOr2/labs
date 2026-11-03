@@ -203,7 +203,7 @@ func renderFlClash(cfg Config) string {
 	b.WriteString(rawBase)
 	b.WriteString(fileFlClash)
 	b.WriteString("\n")
-	b.WriteString("// 脚本只替换策略组、规则和 mode。不改节点，也不打开 allow-lan。\n")
+	b.WriteString("// 脚本替换策略组、规则和 mode，改写 dns 与 tun，并为没写 udp 的节点补上 udp。allow-lan 保持原样。\n")
 	b.WriteString("// AI 组的成员写死在 spec 里，只有手动选择。\n")
 	b.WriteString("function main(config) {\n")
 	b.WriteString("  if (!config || typeof config !== \"object\") {\n")
@@ -243,6 +243,7 @@ func renderFlClash(cfg Config) string {
 	b.WriteString("  config[\"rule-providers\"] = providers;\n")
 	b.WriteString("  config.rules = rules;\n")
 	b.WriteString("  config.mode = \"rule\";\n")
+	b.WriteString("  applyLeakFixes(config);\n")
 	b.WriteString("  return config;\n")
 	b.WriteString("}\n")
 	b.WriteString("\n")
@@ -327,7 +328,8 @@ func renderFlClash(cfg Config) string {
 	b.WriteString("    }\n")
 	b.WriteString("  }\n")
 	b.WriteString("  return out;\n")
-	b.WriteString("}\n")
+	b.WriteString("}\n\n")
+	b.WriteString(FlClashHelpers())
 	return b.String()
 }
 

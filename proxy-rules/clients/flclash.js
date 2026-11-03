@@ -1,7 +1,7 @@
 // FlClash / Clash Verge 覆写脚本。由 proxy-rules 生成，不要手改。
 // 不是节点订阅，也不是在线转换。先导入机场订阅，再把这个文件的原始链接填进覆写脚本。
 // https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/flclash.js
-// 脚本只替换策略组、规则和 mode。不改节点，也不打开 allow-lan。
+// 脚本替换策略组、规则和 mode，改写 dns 与 tun，并为没写 udp 的节点补上 udp。allow-lan 保持原样。
 // AI 组的成员写死在 spec 里，只有手动选择。
 function main(config) {
   if (!config || typeof config !== "object") {
@@ -39,6 +39,7 @@ function main(config) {
   config["rule-providers"] = providers;
   config.rules = rules;
   config.mode = "rule";
+  applyLeakFixes(config);
   return config;
 }
 
@@ -120,6 +121,221 @@ function buildGroup(group, exclude) {
     out.lazy = true;
     if (group.type === "url-test") {
       out.tolerance = group.tolerance || 50;
+    }
+  }
+  return out;
+}
+
+// fake-ip、tun 和 STUN。main 每次都调用，订阅里原来的 dns 会被换掉。
+function applyLeakFixes(config) {
+  config.ipv6 = false;
+  config.dns = clashDNS();
+  config.tun = clashTUN(config.tun);
+  enableProxyUDP(config.proxies);
+  enableProviderUDP(config["proxy-providers"]);
+  var rules = [];
+  if (config.rules && config.rules.length) {
+    rules = dropStunRules(config.rules);
+  }
+  var stun = stunRules();
+  var merged = [];
+  var i;
+  for (i = 0; i < stun.length; i++) {
+    merged.push(stun[i]);
+  }
+  for (i = 0; i < rules.length; i++) {
+    merged.push(rules[i]);
+  }
+  config.rules = merged;
+}
+
+function enableProxyUDP(list) {
+  if (!list || !list.length) {
+    return;
+  }
+  var i;
+  for (i = 0; i < list.length; i++) {
+    var item = list[i];
+    if (!item || typeof item.type !== "string") {
+      continue;
+    }
+    if (!udpCapable(item.type)) {
+      continue;
+    }
+    if (item.udp === false) {
+      continue;
+    }
+    item.udp = true;
+  }
+}
+
+function enableProviderUDP(providers) {
+  if (!providers || typeof providers !== "object") {
+    return;
+  }
+  var name;
+  for (name in providers) {
+    if (!Object.prototype.hasOwnProperty.call(providers, name)) {
+      continue;
+    }
+    var item = providers[name];
+    if (item && item.proxies) {
+      enableProxyUDP(item.proxies);
+    }
+  }
+}
+
+function udpCapable(type) {
+  var types = {
+    "anytls": true,
+    "hy2": true,
+    "hysteria": true,
+    "hysteria2": true,
+    "socks5": true,
+    "ss": true,
+    "ssr": true,
+    "trojan": true,
+    "tuic": true,
+    "vless": true,
+    "vmess": true,
+    "wireguard": true
+  };
+  return types[type] === true;
+}
+
+function clashDNS() {
+  return {
+    "default-nameserver": [
+      "223.5.5.5",
+      "119.29.29.29"
+    ],
+    "direct-nameserver": [
+      "https://dns.alidns.com/dns-query",
+      "https://doh.pub/dns-query"
+    ],
+    "direct-nameserver-follow-policy": false,
+    "enable": true,
+    "enhanced-mode": "fake-ip",
+    "fake-ip-filter": [
+      "*.lan",
+      "*.local",
+      "*.localhost",
+      "localhost",
+      "*.home.arpa",
+      "*.localdomain",
+      "captive.apple.com",
+      "*.msftconnecttest.com",
+      "*.msftncsi.com",
+      "www.msftconnecttest.com",
+      "connectivitycheck.gstatic.com",
+      "connectivitycheck.platform.hicloud.com",
+      "connectivitycheck.platform.hihonorcloud.com",
+      "detectportal.firefox.com",
+      "time.apple.com",
+      "time1.apple.com",
+      "time2.apple.com",
+      "time3.apple.com",
+      "time4.apple.com",
+      "time5.apple.com",
+      "time6.apple.com",
+      "time7.apple.com",
+      "time.windows.com",
+      "time.nist.gov",
+      "pool.ntp.org",
+      "*.pool.ntp.org",
+      "ntp.aliyun.com",
+      "ntp.tencent.com"
+    ],
+    "fake-ip-filter-mode": "blacklist",
+    "fake-ip-range": "198.18.0.1/16",
+    "fallback": [
+      "https://1.1.1.1/dns-query",
+      "https://dns.google/dns-query"
+    ],
+    "fallback-filter": {
+      "geoip": true,
+      "geoip-code": "CN"
+    },
+    "ipv6": false,
+    "listen": "0.0.0.0:1053",
+    "nameserver": [
+      "https://dns.alidns.com/dns-query",
+      "https://doh.pub/dns-query"
+    ],
+    "nameserver-policy": {
+      "geosite:cn": "https://dns.alidns.com/dns-query",
+      "geosite:geolocation-!cn": "https://1.1.1.1/dns-query",
+      "geosite:private": "https://dns.alidns.com/dns-query"
+    },
+    "proxy-server-nameserver": [
+      "https://dns.alidns.com/dns-query",
+      "https://doh.pub/dns-query"
+    ],
+    "respect-rules": true,
+    "use-hosts": true,
+    "use-system-hosts": true
+  };
+}
+
+function clashTUN(existing) {
+  var base = {
+    "auto-detect-interface": true,
+    "auto-route": true,
+    "dns-hijack": [
+      "any:53",
+      "tcp://any:53"
+    ],
+    "dns-mode": "hijack",
+    "enable": true,
+    "route-exclude-address": [
+      "192.168.0.0/16",
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+      "127.0.0.0/8"
+    ],
+    "stack": "mixed",
+    "strict-route": true
+  };
+  var out = {};
+  var key;
+  if (existing && typeof existing === "object") {
+    for (key in existing) {
+      if (Object.prototype.hasOwnProperty.call(existing, key)) {
+        out[key] = existing[key];
+      }
+    }
+  }
+  for (key in base) {
+    if (Object.prototype.hasOwnProperty.call(base, key)) {
+      out[key] = base[key];
+    }
+  }
+  return out;
+}
+
+function stunRules() {
+  return [
+    "DOMAIN-KEYWORD,stun,默认代理",
+    "AND,((NETWORK,UDP),(DST-PORT,3478)),默认代理",
+    "AND,((NETWORK,UDP),(DST-PORT,19302)),默认代理",
+    "AND,((NETWORK,UDP),(DST-PORT,5349)),默认代理",
+    "AND,((NETWORK,UDP),(DST-PORT,3478)),REJECT",
+    "AND,((NETWORK,UDP),(DST-PORT,19302)),REJECT",
+    "AND,((NETWORK,UDP),(DST-PORT,5349)),REJECT"
+  ];
+}
+
+function dropStunRules(rules) {
+  var stun = stunRules();
+  var drop = {};
+  var i;
+  for (i = 0; i < stun.length; i++) {
+    drop[stun[i]] = true;
+  }
+  var out = [];
+  for (i = 0; i < rules.length; i++) {
+    if (!drop[rules[i]]) {
+      out.push(rules[i]);
     }
   }
   return out;

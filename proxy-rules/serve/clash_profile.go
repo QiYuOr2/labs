@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	rulespkg "github.com/QiYuOr2/labs/proxy-rules/internal/rules"
 )
 
 // BuildClash merges an uploaded subscription into one Clash profile.
@@ -33,13 +35,15 @@ func BuildClash(ctx context.Context, subscription string) (string, error) {
 	if !inline {
 		rules, providers = remoteClashRules(spec)
 	}
+	rules = append(rulespkg.ClashStunRules(), rules...)
 	doc := clashDocument{
 		MixedPort:      7890,
 		AllowLan:       false,
 		Mode:           "rule",
 		LogLevel:       "info",
 		IPv6:           false,
-		DNS:            dns,
+		DNS:            ensureClashDNS(dns),
+		Tun:            rulespkg.ClashTun(),
 		Proxies:        proxies,
 		ProxyProviders: clashProviders(remotes),
 		ProxyGroups:    clashGroups(spec, len(remotes) > 0),
@@ -63,11 +67,35 @@ type clashDocument struct {
 	LogLevel       string           `yaml:"log-level"`
 	IPv6           bool             `yaml:"ipv6"`
 	DNS            map[string]any   `yaml:"dns,omitempty"`
+	Tun            map[string]any   `yaml:"tun,omitempty"`
 	Proxies        []map[string]any `yaml:"proxies"`
 	ProxyProviders map[string]any   `yaml:"proxy-providers,omitempty"`
 	ProxyGroups    []map[string]any `yaml:"proxy-groups"`
 	RuleProviders  map[string]any   `yaml:"rule-providers,omitempty"`
 	Rules          []string         `yaml:"rules"`
+}
+
+// ensureClashDNS forces fake-ip and the maintained resolvers. An uploaded
+// nameserver-policy may add an IP mapping such as example.com -> 1.1.1.1.
+// system and dhcp:// never become a resolver.
+func ensureClashDNS(raw map[string]any) map[string]any {
+	dns := rulespkg.ClashDNSBase()
+	policy := map[string]string{}
+	if current, ok := dns["nameserver-policy"].(map[string]string); ok {
+		for domain, server := range current {
+			policy[domain] = server
+		}
+	}
+	if raw != nil {
+		for domain, server := range dnsPolicy(raw["nameserver-policy"]) {
+			if strings.EqualFold(server, "system") || strings.HasPrefix(strings.ToLower(server), "dhcp://") {
+				continue
+			}
+			policy[domain] = server
+		}
+	}
+	dns["nameserver-policy"] = policy
+	return dns
 }
 
 func clashGroups(spec flSpec, providers bool) []map[string]any {
@@ -269,6 +297,10 @@ func emitClash(doc clashDocument) string {
 		b.WriteString("dns:\n")
 		writeMap(&b, doc.DNS, 2)
 	}
+	if len(doc.Tun) > 0 {
+		b.WriteString("tun:\n")
+		writeMap(&b, doc.Tun, 2)
+	}
 	b.WriteString("proxies:\n")
 	if len(doc.Proxies) == 0 {
 		b.WriteString("  []\n")
@@ -321,7 +353,7 @@ func writeMapList(b *strings.Builder, items []map[string]any, indent int) {
 		}
 		b.WriteString(pad)
 		b.WriteString("- ")
-		b.WriteString(keys[0])
+		b.WriteString(yamlKey(keys[0]))
 		b.WriteString(": ")
 		if complexValue(item[keys[0]]) {
 			b.WriteByte('\n')
@@ -339,7 +371,7 @@ func writeMapList(b *strings.Builder, items []map[string]any, indent int) {
 
 func writeKV(b *strings.Builder, pad, key string, value any, indent int) {
 	b.WriteString(pad)
-	b.WriteString(key)
+	b.WriteString(yamlKey(key))
 	b.WriteString(":")
 	if complexValue(value) {
 		b.WriteByte('\n')
@@ -422,6 +454,13 @@ func yamlScalar(value any) string {
 	default:
 		return yamlString(fmt.Sprint(item))
 	}
+}
+
+func yamlKey(key string) string {
+	if yamlPlain(key) {
+		return key
+	}
+	return yamlString(key)
 }
 
 func yamlString(value string) string {

@@ -2,9 +2,12 @@ package serve
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -321,9 +324,124 @@ func TestRealClientsKeepOrder(t *testing.T) {
 	if !strings.Contains(out, "MATCH,漏网之鱼") || strings.Contains(out, "rule-providers") && strings.Contains(out, "type\":\"http\"") {
 		t.Fatal("fl shape")
 	}
+	if strings.Count(out, "function applyLeakFixes") != 1 || !strings.Contains(out, "applyLeakFixes(config);") {
+		t.Fatal("expanded script dropped the leak fixes")
+	}
 	if strings.Contains(out, "https://raw.githubusercontent.com/ACL4SSR/") {
 		t.Fatal("fl remote remained")
 	}
+}
+
+func TestExpandedFlClashAppliesLeakFixes(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Fatal("node is required")
+	}
+	resetFetch(t)
+	script := `function main(config) {
+  var spec = {"groups":[{"name":"默认代理","type":"select","proxies":["DIRECT"]},{"name":"漏网之鱼","type":"select","proxies":["默认代理","DIRECT"]}],"rules":[{"kind":"url","group":"默认代理","url":"https://example.com/a.list"},{"kind":"final","group":"漏网之鱼"}]};
+  return config;
+}
+function buildGroup(group, exclude) { return group; }
+`
+	FetchText = func(_ context.Context, raw string) (string, error) {
+		if raw != "https://example.com/a.list" {
+			t.Fatalf("unexpected %s", raw)
+		}
+		return "DOMAIN-SUFFIX,example.com\n", nil
+	}
+	out, ok := expandFlClash(context.Background(), script)
+	if !ok {
+		t.Fatal("not expanded")
+	}
+	if strings.Count(out, "function applyLeakFixes") != 1 || !strings.Contains(out, "applyLeakFixes(config);") {
+		t.Fatal("helpers were not appended")
+	}
+	got := runFlClashScript(t, out, map[string]any{
+		"allow-lan": true,
+		"dns":       map[string]any{"nameserver": []string{"system"}},
+		"proxies": []any{
+			map[string]any{"name": "Unset", "type": "ss"},
+			map[string]any{"name": "Off", "type": "vmess", "udp": false},
+			map[string]any{"name": "Web", "type": "http"},
+		},
+		"rules": []string{"MATCH,OLD"},
+	})
+	if got["allow-lan"] != true {
+		t.Fatal("allow-lan changed")
+	}
+	dns := got["dns"].(map[string]any)
+	if dns["enhanced-mode"] != "fake-ip" || dns["respect-rules"] != true {
+		t.Fatalf("dns %#v", dns)
+	}
+	tun := got["tun"].(map[string]any)
+	if tun["enable"] != true || tun["dns-mode"] != "hijack" {
+		t.Fatalf("tun %#v", tun)
+	}
+	proxies := got["proxies"].([]any)
+	unset := proxies[0].(map[string]any)
+	off := proxies[1].(map[string]any)
+	web := proxies[2].(map[string]any)
+	if unset["udp"] != true || off["udp"] != false {
+		t.Fatalf("udp %#v %#v", unset, off)
+	}
+	if _, ok := web["udp"]; ok {
+		t.Fatalf("http %#v", web)
+	}
+	ruleset := got["rules"].([]any)
+	if ruleset[0] != "DOMAIN-KEYWORD,stun,默认代理" {
+		t.Fatalf("first %#v", ruleset[0])
+	}
+	joined := make([]string, len(ruleset))
+	for i, rule := range ruleset {
+		joined[i] = rule.(string)
+	}
+	text := strings.Join(joined, "\n")
+	if !strings.Contains(text, "DOMAIN-SUFFIX,example.com,默认代理") || !strings.HasSuffix(text, "MATCH,漏网之鱼") || strings.Contains(text, "OLD") {
+		t.Fatalf("rules %s", text)
+	}
+	if strings.Count(text, "DOMAIN-KEYWORD,stun,默认代理") != 1 {
+		t.Fatalf("stun duplicated %s", text)
+	}
+}
+
+func runFlClashScript(t *testing.T, script string, input any) map[string]any {
+	t.Helper()
+	dir := t.TempDir()
+	scriptPath := filepath.Join(dir, "flclash.js")
+	inputPath := filepath.Join(dir, "input.json")
+	runnerPath := filepath.Join(dir, "run.js")
+	if err := os.WriteFile(scriptPath, []byte(script), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(inputPath, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runner := `const fs = require("fs");
+const vm = require("vm");
+const code = fs.readFileSync(process.argv[2], "utf8");
+const input = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+const sandbox = {};
+vm.createContext(sandbox);
+vm.runInContext(code, sandbox, { filename: "flclash.js" });
+process.stdout.write(JSON.stringify(sandbox.main(input)));
+`
+	if err := os.WriteFile(runnerPath, []byte(runner), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("node", runnerPath, scriptPath, inputPath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("node: %v\n%s", err, out)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, out)
+	}
+	return got
 }
 
 func TestScreenRejectsLocal(t *testing.T) {
