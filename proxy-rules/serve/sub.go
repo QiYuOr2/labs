@@ -1131,7 +1131,12 @@ func splitSSLegacy(decoded string) (method, password, host string, port int) {
 func parseVMessURI(line string) (proxy, bool) {
 	raw := strings.TrimPrefix(line, "vmess://")
 	raw = strings.TrimPrefix(raw, "VMess://")
-	decoded, ok := decodeText(raw)
+	if i := strings.IndexAny(raw, "#?"); i >= 0 {
+		raw = raw[:i]
+	}
+	// decodeText only accepts a whole subscription document. A vmess link is
+	// base64 of one JSON object, which does not contain those markers.
+	decoded, ok := decodeBase64(raw)
 	if !ok {
 		return proxy{}, false
 	}
@@ -1226,7 +1231,9 @@ func qxServerLine(line string) bool {
 		return false
 	}
 	switch strings.TrimSpace(head) {
-	case "shadowsocks", "shadowsocksr", "vmess", "vless", "trojan", "http", "https", "socks5", "socks5-tls", "hysteria2", "hysteria":
+	// anytls has to be recognized here. Native lines are copied through, and a
+	// type rejected by this function never reaches ensureQXUDPRelay.
+	case "shadowsocks", "shadowsocksr", "vmess", "vless", "trojan", "anytls", "http", "https", "socks5", "socks5-tls", "hysteria2", "hysteria":
 		return true
 	default:
 		return false
@@ -1807,13 +1814,24 @@ func looksHTML(body string) bool {
 }
 
 func decodeText(body string) (string, bool) {
-	compact := strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\r' || r == '\t' || r == ' ' {
-			return -1
-		}
-		return r
-	}, strings.TrimSpace(body))
+	compact := compactBase64(body)
 	if len(compact) < 16 {
+		return "", false
+	}
+	decoded, ok := decodeBase64(compact)
+	if !ok {
+		return "", false
+	}
+	text := normalize(decoded)
+	if strings.Contains(text, "[") || strings.Contains(text, "://") || strings.Contains(text, "proxies:") || strings.Contains(text, "server=") {
+		return text, true
+	}
+	return "", false
+}
+
+func decodeBase64(raw string) (string, bool) {
+	compact := compactBase64(raw)
+	if compact == "" {
 		return "", false
 	}
 	for _, r := range compact {
@@ -1830,14 +1848,19 @@ func decodeText(body string) (string, bool) {
 	if err != nil {
 		decoded, err = base64.URLEncoding.DecodeString(padBase64(compact))
 	}
-	if err != nil {
+	if err != nil || len(decoded) == 0 {
 		return "", false
 	}
-	text := normalize(string(decoded))
-	if strings.Contains(text, "[") || strings.Contains(text, "://") || strings.Contains(text, "proxies:") || strings.Contains(text, "server=") {
-		return text, true
-	}
-	return "", false
+	return string(decoded), true
+}
+
+func compactBase64(raw string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == '\t' || r == ' ' {
+			return -1
+		}
+		return r
+	}, strings.TrimSpace(raw))
 }
 
 func padBase64(s string) string {

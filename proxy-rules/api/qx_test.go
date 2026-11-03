@@ -44,18 +44,18 @@ hostname = -testflight.apple.com
 `
 
 func TestMergeQuantumultXKeepsGeneralWithParser(t *testing.T) {
-	base := strings.Replace(baseProfile, "[general]\n", "[general]\nfallback_udp_policy=reject\n", 1)
+	base := strings.Replace(baseProfile, "[general]\n", "[general]\nfallback_udp_policy=reject\ndns_exclusion_list = *.example.com\n; keep me\nresource_parser_url=http://example.com/old.js\n", 1)
 	subscription := "[server_remote]\nhttps://example.com/nodes, tag=extra, enabled=true\n"
 	got, err := MergeQuantumultX(base, subscription, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "[general]\nfallback_udp_policy=reject\nresource_parser_url=" + parserURL + "\n"
+	want := "[general]\nfallback_udp_policy=reject\ndns_exclusion_list = *.example.com\n; keep me\nresource_parser_url=" + parserURL + "\n"
 	if !strings.Contains(got, want) {
-		t.Fatalf("[general] lost fallback_udp_policy or parser\n%s", got)
+		t.Fatalf("[general] lost existing lines or parser\n%s", got)
 	}
-	if strings.Count(got, "resource_parser_url=") != 1 {
-		t.Fatalf("resource_parser_url repeated\n%s", got)
+	if strings.Count(got, "resource_parser_url=") != 1 || strings.Contains(got, "example.com/old.js") {
+		t.Fatalf("resource_parser_url was not replaced once\n%s", got)
 	}
 }
 
