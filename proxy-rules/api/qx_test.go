@@ -43,6 +43,22 @@ skip_validating_cert = true
 hostname = -testflight.apple.com
 `
 
+func TestMergeQuantumultXKeepsGeneralWithParser(t *testing.T) {
+	base := strings.Replace(baseProfile, "[general]\n", "[general]\nfallback_udp_policy=reject\ndns_exclusion_list = *.example.com\n; keep me\nresource_parser_url=http://example.com/old.js\n", 1)
+	subscription := "[server_remote]\nhttps://example.com/nodes, tag=extra, enabled=true\n"
+	got, err := MergeQuantumultX(base, subscription, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "[general]\nfallback_udp_policy=reject\ndns_exclusion_list = *.example.com\n; keep me\nresource_parser_url=" + parserURL + "\n"
+	if !strings.Contains(got, want) {
+		t.Fatalf("[general] lost existing lines or parser\n%s", got)
+	}
+	if strings.Count(got, "resource_parser_url=") != 1 || strings.Contains(got, "example.com/old.js") {
+		t.Fatalf("resource_parser_url was not replaced once\n%s", got)
+	}
+}
+
 func TestMergeQuantumultXKeepsRules(t *testing.T) {
 	subscription := `
 [dns]
@@ -70,7 +86,7 @@ hostname = evil.example
 	for _, want := range []string{
 		"[dns]\nno-ipv6\nserver=223.5.5.5\n",
 		"static=🤖 AI, direct",
-		"shadowsocks=1.2.3.4:443, method=aes-128-gcm, password=secret, tag=日本 1",
+		"shadowsocks=1.2.3.4:443, method=aes-128-gcm, password=secret, udp-relay=true, tag=日本 1",
 		"https://example.com/nodes, tag=extra, update-interval=86400, opt-parser=true, enabled=true",
 		"https://example.com/rules.list, tag=labs-01",
 		"https://example.com/ad.conf, tag=ad",
@@ -128,7 +144,7 @@ func TestMergeDecodesBase64Profile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got, "trojan=example.com:443, password=secret, tag=日本") || !strings.Contains(got, "server=223.5.5.5") {
+	if !strings.Contains(got, "trojan=example.com:443, password=secret, udp-relay=true, tag=日本") || !strings.Contains(got, "server=223.5.5.5") {
 		t.Fatalf("decoded profile was not merged\n%s", got)
 	}
 	if strings.Contains(got, "tag=subscription") {
@@ -430,7 +446,7 @@ func TestMergeWithoutURLUsesNodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got, "trojan=example.com:443, password=secret, tag=日本") {
+	if !strings.Contains(got, "trojan=example.com:443, password=secret, udp-relay=true, tag=日本") {
 		t.Fatalf("%s", got)
 	}
 	if strings.Contains(got, "tag=subscription") {

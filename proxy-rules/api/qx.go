@@ -60,7 +60,8 @@ func MergeQuantumultX(base, subscription, sourceURL string) (string, error) {
 		return "", err
 	}
 	if len(remote) > 0 {
-		merged, err = replaceSection(merged, "general", "resource_parser_url="+parserURL)
+		general := append(sectionLines(merged, "general"), "resource_parser_url="+parserURL)
+		merged, err = replaceSection(merged, "general", strings.Join(general, "\n"))
 		if err != nil {
 			return "", err
 		}
@@ -505,6 +506,30 @@ func normalize(body string) string {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 	body = strings.ReplaceAll(body, "\r", "\n")
 	return body
+}
+
+// sectionLines returns the non-empty lines of a section, without the header.
+// Existing resource_parser_url lines are dropped so the caller can set its own.
+func sectionLines(config, name string) []string {
+	header := "[" + name + "]"
+	var out []string
+	in := false
+	for _, line := range strings.Split(config, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if isHeader(trimmed) {
+			in = trimmed == header
+			continue
+		}
+		if !in || trimmed == "" {
+			continue
+		}
+		key, _, _ := strings.Cut(trimmed, "=")
+		if strings.EqualFold(strings.TrimSpace(key), "resource_parser_url") {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
 }
 
 func replaceSection(config, name, body string) (string, error) {

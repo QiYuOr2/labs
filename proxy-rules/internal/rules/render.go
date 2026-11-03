@@ -338,7 +338,12 @@ func renderQuantumultX(cfg Config, rewrites []string) string {
 	b.WriteString("# [server_remote] 故意留空。机场订阅在「节点」里单独添加。\n")
 	b.WriteString("# 不要把这份文件设成会反复覆盖整份配置的订阅，否则空的节点段会把你的订阅冲掉。\n")
 	b.WriteString("# 分流和重写是远程资源，会自己更新。策略组变了才需要重新下载这份文件。\n")
-	b.WriteString("\n[general]\n\n[dns]\n\n[policy]\n")
+	b.WriteString("\n[general]\n")
+	// Quantumult X sends UDP for a node without udp-relay to fallback_udp_policy.
+	// reject is the documented default; write it so nobody changes it to direct,
+	// which would let WebRTC/STUN leave from the real address.
+	b.WriteString("fallback_udp_policy=reject\n")
+	b.WriteString("\n[dns]\n\n[policy]\n")
 	for _, group := range cfg.Groups {
 		b.WriteString(qxPolicy(group))
 		b.WriteByte('\n')

@@ -27,6 +27,7 @@ type proxy struct {
 	SNI         string
 	TLS         bool
 	UDP         bool
+	UDPSet      bool // the source said whether UDP is on or off
 	SkipCert    bool
 	Flow        string
 	PublicKey   string
@@ -59,7 +60,10 @@ type bundle struct {
 func NodesForQuantumultX(body string) (local, remote, dns []string) {
 	b := parseBundle(body)
 	if len(b.qxLocal) > 0 {
-		return b.qxLocal, b.qxRemote, b.qxDNS
+		for _, line := range b.qxLocal {
+			local = append(local, ensureQXUDPRelay(line))
+		}
+		return local, b.qxRemote, b.qxDNS
 	}
 	for _, item := range b.proxies {
 		if line, ok := item.qx(); ok {
@@ -406,6 +410,7 @@ func parseQXProxy(line string) (proxy, bool) {
 	item.UUID = item.Password
 	item.Network = "tcp"
 	item.UDP = boolOpt(opts["udp-relay"])
+	_, item.UDPSet = opts["udp-relay"]
 	item.TLS = boolOpt(opts["over-tls"]) || boolOpt(opts["tls"]) || boolOpt(opts["tls13"])
 	if raw, ok := opts["tls-verification"]; ok {
 		item.SkipCert = !boolOpt(raw)
@@ -474,6 +479,7 @@ func parseSRProxy(line string) (proxy, bool) {
 	item.Network = "tcp"
 	item.TLS = boolOpt(opts["tls"]) || boolOpt(opts["over-tls"])
 	item.UDP = boolOpt(opts["udp-relay"])
+	_, item.UDPSet = opts["udp-relay"]
 	item.SNI = cleanValue(first(opts["sni"], opts["peer"], opts["tls-host"]))
 	item.Path = cleanValue(first(opts["ws-path"], opts["path"]))
 	item.Host = headerHost(opts["ws-headers"])
@@ -543,6 +549,7 @@ func parseClashProxy(raw map[string]any) (proxy, bool) {
 	item.Flow = cleanValue(item.Flow)
 	item.TLS, _ = asBool(raw["tls"])
 	item.UDP, _ = asBool(raw["udp"])
+	_, item.UDPSet = raw["udp"]
 	item.SkipCert, _ = asBool(raw["skip-cert-verify"])
 	item.Protocol, _ = asString(raw["protocol"])
 	item.ProtoParam, _ = asString(raw["protocol-param"])
@@ -599,7 +606,7 @@ func (p proxy) qx() (string, bool) {
 			add("obfs", p.Obfs)
 			add("obfs-host", p.ObfsParam)
 		}
-		if p.UDP {
+		if p.qxUDPRelay() {
 			add("udp-relay", "true")
 		}
 	case "ssr":
@@ -636,7 +643,7 @@ func (p proxy) qx() (string, bool) {
 			add("obfs", "over-tls")
 			add("tls-host", p.SNI)
 		}
-		if p.UDP {
+		if p.qxUDPRelay() {
 			add("udp-relay", "true")
 		}
 	case "vless":
@@ -658,6 +665,9 @@ func (p proxy) qx() (string, bool) {
 			add("obfs", "over-tls")
 			add("tls-host", p.SNI)
 		}
+		if p.qxUDPRelay() {
+			add("udp-relay", "true")
+		}
 	case "trojan":
 		if p.Password == "" {
 			return "", false
@@ -671,7 +681,7 @@ func (p proxy) qx() (string, bool) {
 			add("obfs-uri", p.Path)
 			add("obfs-host", first(p.Host, p.SNI))
 		}
-		if p.UDP {
+		if p.qxUDPRelay() {
 			add("udp-relay", "true")
 		}
 		if p.SkipCert {
@@ -1121,7 +1131,12 @@ func splitSSLegacy(decoded string) (method, password, host string, port int) {
 func parseVMessURI(line string) (proxy, bool) {
 	raw := strings.TrimPrefix(line, "vmess://")
 	raw = strings.TrimPrefix(raw, "VMess://")
-	decoded, ok := decodeText(raw)
+	if i := strings.IndexAny(raw, "#?"); i >= 0 {
+		raw = raw[:i]
+	}
+	// decodeText only accepts a whole subscription document. A vmess link is
+	// base64 of one JSON object, which does not contain those markers.
+	decoded, ok := decodeBase64(raw)
 	if !ok {
 		return proxy{}, false
 	}
@@ -1216,7 +1231,9 @@ func qxServerLine(line string) bool {
 		return false
 	}
 	switch strings.TrimSpace(head) {
-	case "shadowsocks", "shadowsocksr", "vmess", "vless", "trojan", "http", "https", "socks5", "socks5-tls", "hysteria2", "hysteria":
+	// anytls has to be recognized here. Native lines are copied through, and a
+	// type rejected by this function never reaches ensureQXUDPRelay.
+	case "shadowsocks", "shadowsocksr", "vmess", "vless", "trojan", "anytls", "http", "https", "socks5", "socks5-tls", "hysteria2", "hysteria":
 		return true
 	default:
 		return false
@@ -1251,6 +1268,60 @@ func srType(typ string) string {
 	default:
 		return typ
 	}
+}
+
+// qxUDPRelay reports whether a converted node gets udp-relay=true.
+// The source wins when it says on or off. When it says nothing (ss://, vmess://,
+// trojan://, vless:// links, or Clash without udp), UDP is turned on, because
+// Quantumult X treats a missing udp-relay as off and sends UDP to
+// fallback_udp_policy instead of the node, which breaks games and WebRTC.
+func (p proxy) qxUDPRelay() bool {
+	return p.UDP || !p.UDPSet
+}
+
+// qxUDPTypes are the Quantumult X server types that the official sample.conf
+// shows with udp-relay=true. http, https, socks5 and socks5-tls are always
+// udp-relay=false there, so they are left alone.
+var qxUDPTypes = map[string]bool{
+	"shadowsocks": true,
+	"vmess":       true,
+	"vless":       true,
+	"trojan":      true,
+	"anytls":      true,
+}
+
+// ensureQXUDPRelay adds udp-relay=true to a native Quantumult X server line
+// that does not say anything about UDP. An explicit udp-relay=false is kept.
+// ShadowsocksR lines (shadowsocks with ssr-protocol) are left alone.
+func ensureQXUDPRelay(line string) string {
+	head, rest, ok := strings.Cut(line, "=")
+	if !ok || !qxUDPTypes[strings.ToLower(strings.TrimSpace(head))] {
+		return line
+	}
+	parts := strings.Split(rest, ",")
+	tagAt := -1
+	for i, part := range parts {
+		key, _, found := strings.Cut(part, "=")
+		if !found {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "udp-relay", "ssr-protocol":
+			return line
+		case "tag":
+			if tagAt < 0 {
+				tagAt = i
+			}
+		}
+	}
+	if tagAt < 0 {
+		return strings.TrimRight(line, " ") + ", udp-relay=true"
+	}
+	out := make([]string, 0, len(parts)+1)
+	out = append(out, parts[:tagAt]...)
+	out = append(out, " udp-relay=true")
+	out = append(out, parts[tagAt:]...)
+	return head + "=" + strings.Join(out, ",")
 }
 
 func qxLine(typ, host string, port int, opts [][2]string, tag string) string {
@@ -1743,13 +1814,24 @@ func looksHTML(body string) bool {
 }
 
 func decodeText(body string) (string, bool) {
-	compact := strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\r' || r == '\t' || r == ' ' {
-			return -1
-		}
-		return r
-	}, strings.TrimSpace(body))
+	compact := compactBase64(body)
 	if len(compact) < 16 {
+		return "", false
+	}
+	decoded, ok := decodeBase64(compact)
+	if !ok {
+		return "", false
+	}
+	text := normalize(decoded)
+	if strings.Contains(text, "[") || strings.Contains(text, "://") || strings.Contains(text, "proxies:") || strings.Contains(text, "server=") {
+		return text, true
+	}
+	return "", false
+}
+
+func decodeBase64(raw string) (string, bool) {
+	compact := compactBase64(raw)
+	if compact == "" {
 		return "", false
 	}
 	for _, r := range compact {
@@ -1766,14 +1848,19 @@ func decodeText(body string) (string, bool) {
 	if err != nil {
 		decoded, err = base64.URLEncoding.DecodeString(padBase64(compact))
 	}
-	if err != nil {
+	if err != nil || len(decoded) == 0 {
 		return "", false
 	}
-	text := normalize(string(decoded))
-	if strings.Contains(text, "[") || strings.Contains(text, "://") || strings.Contains(text, "proxies:") || strings.Contains(text, "server=") {
-		return text, true
-	}
-	return "", false
+	return string(decoded), true
+}
+
+func compactBase64(raw string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == '\t' || r == ' ' {
+			return -1
+		}
+		return r
+	}, strings.TrimSpace(raw))
 }
 
 func padBase64(s string) string {

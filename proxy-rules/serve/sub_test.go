@@ -2,6 +2,7 @@ package serve
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -379,5 +380,94 @@ func TestStripEmojiFromNodeNames(t *testing.T) {
 	proxies, _ := NodesForShadowrocket("[Proxy]\n🇯🇵 Japan | 01 = trojan, example.com, 443, password=secret\n")
 	if len(proxies) != 1 || !strings.HasPrefix(proxies[0], "Japan | 01 = trojan,") || strings.Contains(proxies[0], "🇯🇵") {
 		t.Fatalf("sr %v", proxies)
+	}
+}
+
+func TestEnsureQXUDPRelay(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"shadowsocks=example.com:443, method=aes-128-gcm, password=pwd, tag=A", "shadowsocks=example.com:443, method=aes-128-gcm, password=pwd, udp-relay=true, tag=A"},
+		{"trojan = example.com:443, password=pwd, over-tls=true, tag=B", "trojan = example.com:443, password=pwd, over-tls=true, udp-relay=true, tag=B"},
+		{"vless=example.com:443, method=none, password=id, obfs=over-tls", "vless=example.com:443, method=none, password=id, obfs=over-tls, udp-relay=true"},
+		{"vmess=example.com:443, method=none, password=id, udp-relay=false, tag=C", "vmess=example.com:443, method=none, password=id, udp-relay=false, tag=C"},
+		{"vmess=example.com:443, method=none, password=id, udp-relay=true, tag=C2", "vmess=example.com:443, method=none, password=id, udp-relay=true, tag=C2"},
+		{"anytls=example.com:443, password=pwd, over-tls=true, tls-host=edge.example, tag=G", "anytls=example.com:443, password=pwd, over-tls=true, tls-host=edge.example, udp-relay=true, tag=G"},
+		{"http=example.com:80, username=u, password=p, tag=D", "http=example.com:80, username=u, password=p, tag=D"},
+		{"https=example.com:443, username=u, password=p, tag=H", "https=example.com:443, username=u, password=p, tag=H"},
+		{"socks5=example.com:80, tag=E", "socks5=example.com:80, tag=E"},
+		{"socks5-tls=example.com:443, tag=S", "socks5-tls=example.com:443, tag=S"},
+		{"shadowsocksr=example.com:443, method=chacha20, password=pwd, tag=R", "shadowsocksr=example.com:443, method=chacha20, password=pwd, tag=R"},
+		{"shadowsocks=example.com:443, method=chacha20, password=pwd, ssr-protocol=auth_chain_b, obfs=tls1.2_ticket_fastauth, tag=F", "shadowsocks=example.com:443, method=chacha20, password=pwd, ssr-protocol=auth_chain_b, obfs=tls1.2_ticket_fastauth, tag=F"},
+	}
+	for _, c := range cases {
+		if got := ensureQXUDPRelay(c.in); got != c.want {
+			t.Errorf("ensureQXUDPRelay(%q)\n got %q\nwant %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestQXUDPRelayForConvertedNodes(t *testing.T) {
+	vmess := base64.StdEncoding.EncodeToString([]byte(`{"ps":"VM","add":"example.com","port":"443","id":"11111111-1111-1111-1111-111111111111","net":"tcp"}`))
+	uris := "ss://YWVzLTEyOC1nY206cHdk@example.com:443#SS\n" +
+		"trojan://pwd@example.com:443?sni=edge.example#TR\n" +
+		"vless://11111111-1111-1111-1111-111111111111@example.com:443?security=tls&sni=edge.example#VL\n" +
+		"vmess://" + vmess + "#VM\n"
+	local, _, _ := NodesForQuantumultX(uris)
+	if len(local) != 4 {
+		t.Fatalf("want 4 nodes, got %d: %v", len(local), local)
+	}
+	for _, line := range local {
+		if !strings.Contains(line, "udp-relay=true") {
+			t.Errorf("missing udp-relay=true: %s", line)
+		}
+	}
+
+	clash := "proxies:\n" +
+		"  - {name: On, type: trojan, server: example.com, port: 443, password: pwd, udp: true}\n" +
+		"  - {name: Off, type: trojan, server: example.com, port: 443, password: pwd, udp: false}\n" +
+		"  - {name: Unset, type: ss, server: example.com, port: 443, cipher: aes-128-gcm, password: pwd}\n" +
+		"  - {name: SSOff, type: ss, server: example.com, port: 443, cipher: aes-128-gcm, password: pwd, udp: false}\n" +
+		"  - {name: VM, type: vmess, server: example.com, port: 443, uuid: 11111111-1111-1111-1111-111111111111}\n" +
+		"  - {name: VL, type: vless, server: example.com, port: 443, uuid: 11111111-1111-1111-1111-111111111111}\n" +
+		"  - {name: Web, type: http, server: example.com, port: 80}\n" +
+		"  - {name: SecureWeb, type: http, server: example.com, port: 443, tls: true, username: u, password: p}\n" +
+		"  - {name: Sock, type: socks5, server: example.com, port: 1080}\n" +
+		"  - {name: SSR, type: ssr, server: example.com, port: 443, cipher: chacha20, password: pwd, protocol: auth_chain_b, obfs: tls1.2_ticket_fastauth}\n"
+	local, _, _ = NodesForQuantumultX(clash)
+	got := map[string]bool{}
+	for _, line := range local {
+		tag := line[strings.LastIndex(line, "tag=")+4:]
+		got[tag] = strings.Contains(line, "udp-relay=true")
+	}
+	want := map[string]bool{
+		"On": true, "Off": false, "Unset": true, "SSOff": false,
+		"VM": true, "VL": true, "Web": false, "SecureWeb": false, "Sock": false, "SSR": false,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("tags %#v\nlines %v", got, local)
+	}
+	for tag, on := range want {
+		if v, ok := got[tag]; !ok || v != on {
+			t.Errorf("%s: udp-relay=true is %v, want %v (lines %v)", tag, v, on, local)
+		}
+	}
+}
+
+func TestNativeAnyTLSAndUntouchedTypes(t *testing.T) {
+	body := "[server_local]\n" +
+		"anytls=example.com:443, password=pwd, over-tls=true, tls-host=edge.example, tag=A\n" +
+		"anytls=example.com:443, password=pwd, udp-relay=false, tag=B\n" +
+		"https=example.com:443, username=u, password=p, tag=C\n" +
+		"socks5-tls=example.com:443, username=u, password=p, tag=D\n" +
+		"vmess=example.com:443, method=none, password=id, udp-relay=true, tag=E\n"
+	local, _, _ := NodesForQuantumultX(body)
+	want := []string{
+		"anytls=example.com:443, password=pwd, over-tls=true, tls-host=edge.example, udp-relay=true, tag=A",
+		"anytls=example.com:443, password=pwd, udp-relay=false, tag=B",
+		"https=example.com:443, username=u, password=p, tag=C",
+		"socks5-tls=example.com:443, username=u, password=p, tag=D",
+		"vmess=example.com:443, method=none, password=id, udp-relay=true, tag=E",
+	}
+	if strings.Join(local, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("got %v\nwant %v", local, want)
 	}
 }
