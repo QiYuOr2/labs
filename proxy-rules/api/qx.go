@@ -19,7 +19,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/QiYuOr2/labs/proxy-rules/internal/rules"
+	"github.com/QiYuOr2/labs/proxy-rules/pkg/qxleak"
 	"github.com/QiYuOr2/labs/proxy-rules/serve"
 )
 
@@ -273,7 +273,7 @@ func mergeQXDNS(lines []string) []string {
 		seen[key] = struct{}{}
 		out = append(out, line)
 	}
-	for _, line := range rules.QuantumultXDNS() {
+	for _, line := range qxleak.QuantumultXDNS() {
 		add(line)
 	}
 	for _, line := range lines {
@@ -322,7 +322,7 @@ func ensureQXGeneralLines(lines []string) []string {
 		lines = append(lines, "fallback_udp_policy=reject")
 	}
 	if !hasExclusion {
-		lines = append(lines, "dns_exclusion_list = "+rules.QuantumultXDNSExclusion())
+		lines = append(lines, "dns_exclusion_list = "+qxleak.QuantumultXDNSExclusion())
 	}
 	return lines
 }
@@ -977,7 +977,7 @@ func expandFilters(ctx context.Context, config string) string {
 		head = append(head, line)
 	}
 	if !qxHasStun(head) {
-		head = append(append([]string{}, rules.QuantumultXStunFilters()...), head...)
+		head = append(append([]string{}, qxleak.QuantumultXStunFilters()...), head...)
 	}
 	var b strings.Builder
 	seen := make(map[string]struct{})
