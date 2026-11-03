@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	rulespkg "github.com/QiYuOr2/labs/proxy-rules/internal/rules"
 )
 
 const (
@@ -148,7 +150,7 @@ func expandFlClash(ctx context.Context, script string) (string, bool) {
 	b.WriteString("// ")
 	b.WriteString(publicBase())
 	b.WriteString("/api/flclash\n")
-	b.WriteString("// 脚本只替换策略组、规则和 mode。不改节点，也不打开 allow-lan。\n")
+	b.WriteString("// 脚本替换策略组、规则和 mode，改写 dns 与 tun，并为没写 udp 的节点补上 udp。allow-lan 保持原样。\n")
 	b.WriteString("function main(config) {\n")
 	b.WriteString("  if (!config || typeof config !== \"object\") {\n")
 	b.WriteString("    return config;\n")
@@ -167,11 +169,16 @@ func expandFlClash(ctx context.Context, script string) (string, bool) {
 	b.Write(payload)
 	b.WriteString(";\n")
 	b.WriteString("  config.mode = \"rule\";\n")
+	b.WriteString("  applyLeakFixes(config);\n")
 	b.WriteString("  return config;\n")
 	b.WriteString("}\n\n")
 	b.WriteString(tail)
 	if !strings.HasSuffix(tail, "\n") {
 		b.WriteByte('\n')
+	}
+	if !strings.Contains(tail, "function applyLeakFixes") {
+		b.WriteByte('\n')
+		b.WriteString(rulespkg.FlClashHelpers())
 	}
 	return b.String(), true
 }

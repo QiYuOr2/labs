@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/QiYuOr2/labs/proxy-rules/internal/rules"
 	"gopkg.in/yaml.v3"
 )
 
@@ -191,7 +192,11 @@ function buildGroup(group, exclude) { return group; }
 	if strings.Contains(joined, "自动选择") || strings.Contains(joined, "故障转移") || !strings.Contains(joined, "日本节点") {
 		t.Fatalf("ai %#v", ai)
 	}
-	if len(doc.Rules) == 0 || doc.Rules[0] != "DOMAIN-SUFFIX,openai.com,AI" || doc.Rules[len(doc.Rules)-1] != "MATCH,漏网之鱼" {
+	stun := rules.ClashStunRules()
+	if len(doc.Rules) < len(stun)+2 || strings.Join(doc.Rules[:len(stun)], "\n") != strings.Join(stun, "\n") {
+		t.Fatalf("rules %#v", doc.Rules)
+	}
+	if doc.Rules[len(stun)] != "DOMAIN-SUFFIX,openai.com,AI" || doc.Rules[len(doc.Rules)-1] != "MATCH,漏网之鱼" {
 		t.Fatalf("rules %#v", doc.Rules)
 	}
 	if doc.ProxyGroups[0]["icon"] != "https://example.com/ai.png" {
@@ -333,6 +338,50 @@ func TestClashNameserverPolicyIsMapping(t *testing.T) {
 	if decoded["example.com"] != "1.1.1.1" {
 		t.Fatalf("policy %#v", decoded)
 	}
+	if decoded["geosite:cn"] == "" || decoded["geosite:geolocation-!cn"] == "" {
+		t.Fatalf("policy %#v", decoded)
+	}
+	dns := root.Content[0]
+	if got := findMapping(dns, "dns", "enhanced-mode"); got == nil || got.Value != "fake-ip" {
+		t.Fatalf("enhanced-mode %#v", got)
+	}
+	if got := findMapping(dns, "dns", "respect-rules"); got == nil || got.Value != "true" {
+		t.Fatalf("respect-rules %#v", got)
+	}
+	if got := findMapping(dns, "dns", "fake-ip-range"); got == nil || got.Value != "198.18.0.1/16" {
+		t.Fatalf("fake-ip-range %#v", got)
+	}
+	for _, key := range []string{"nameserver", "fallback", "default-nameserver", "proxy-server-nameserver", "direct-nameserver"} {
+		for _, server := range scalarList(findMapping(dns, "dns", key)) {
+			if server == "system" || strings.HasPrefix(server, "dhcp://") {
+				t.Fatalf("%s uses %s\n%s", key, server, dnsSection(got))
+			}
+		}
+	}
+	direct := scalarList(findMapping(dns, "dns", "direct-nameserver"))
+	if len(direct) != 2 || direct[0] != "https://dns.alidns.com/dns-query" {
+		t.Fatalf("direct-nameserver %#v", direct)
+	}
+	if !strings.Contains(got, `"geosite:geolocation-!cn"`) {
+		t.Fatalf("geosite key was not quoted\n%s", dnsSection(got))
+	}
+	if tun := findMapping(dns, "tun", "enable"); tun == nil || tun.Value != "true" {
+		t.Fatalf("tun %#v", tun)
+	}
+	if mode := findMapping(dns, "tun", "dns-mode"); mode == nil || mode.Value != "hijack" {
+		t.Fatalf("dns-mode %#v", mode)
+	}
+}
+
+func scalarList(node *yaml.Node) []string {
+	if node == nil || node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	out := make([]string, 0, len(node.Content))
+	for _, item := range node.Content {
+		out = append(out, item.Value)
+	}
+	return out
 }
 
 func dnsSection(body string) string {
@@ -380,6 +429,67 @@ func TestStripEmojiFromNodeNames(t *testing.T) {
 	proxies, _ := NodesForShadowrocket("[Proxy]\n🇯🇵 Japan | 01 = trojan, example.com, 443, password=secret\n")
 	if len(proxies) != 1 || !strings.HasPrefix(proxies[0], "Japan | 01 = trojan,") || strings.Contains(proxies[0], "🇯🇵") {
 		t.Fatalf("sr %v", proxies)
+	}
+}
+
+func TestClashUDPDefault(t *testing.T) {
+	body := "proxies:\n" +
+		"  - {name: Unset, type: ss, server: example.com, port: 443, cipher: aes-128-gcm, password: pwd}\n" +
+		"  - {name: Off, type: vmess, server: example.com, port: 443, uuid: 11111111-1111-1111-1111-111111111111, udp: false}\n" +
+		"  - {name: On, type: trojan, server: example.com, port: 443, password: pwd, udp: true}\n" +
+		"  - {name: Web, type: http, server: example.com, port: 80}\n" +
+		"  - {name: Sock, type: socks5, server: example.com, port: 1080}\n" +
+		"  - {name: HY, type: hysteria2, server: example.com, port: 443, password: pwd}\n" +
+		"  - {name: SSR, type: ssr, server: example.com, port: 443, cipher: chacha20, password: pwd, protocol: auth_chain_b, obfs: tls1.2_ticket_fastauth}\n"
+	proxies, _, _ := ClashNodes(body)
+	got := map[string]map[string]any{}
+	for _, item := range proxies {
+		name, _ := item["name"].(string)
+		got[name] = item
+	}
+	for _, name := range []string{"Unset", "On", "Sock", "HY", "SSR"} {
+		if got[name]["udp"] != true {
+			t.Errorf("%s udp = %#v", name, got[name]["udp"])
+		}
+	}
+	if got["Off"]["udp"] != false {
+		t.Fatalf("Off %#v", got["Off"])
+	}
+	if _, ok := got["Web"]["udp"]; ok {
+		t.Fatalf("http gained udp %#v", got["Web"])
+	}
+	uri, _, _ := ClashNodes("ss://YWVzLTEyOC1nY206cHdk@example.com:443#SS\n")
+	if len(uri) != 1 || uri[0]["udp"] != true || uri[0]["type"] != "ss" {
+		t.Fatalf("uri %#v", uri)
+	}
+}
+
+func TestEnsureClashDNSDropsSystem(t *testing.T) {
+	dns := ensureClashDNS(map[string]any{
+		"enable":     false,
+		"nameserver": []any{"system", "dhcp://en0"},
+		"nameserver-policy": map[string]any{
+			"example.com": "1.1.1.1",
+			"geosite:cn":  "system",
+			"lan.example": "dhcp://system",
+		},
+	})
+	if dns["enhanced-mode"] != "fake-ip" || dns["respect-rules"] != true {
+		t.Fatalf("%#v", dns)
+	}
+	policy := dns["nameserver-policy"].(map[string]string)
+	if policy["example.com"] != "1.1.1.1" || policy["geosite:cn"] != "https://dns.alidns.com/dns-query" {
+		t.Fatalf("policy %#v", policy)
+	}
+	if _, ok := policy["lan.example"]; ok {
+		t.Fatalf("dhcp policy kept %#v", policy)
+	}
+	for _, key := range []string{"nameserver", "fallback", "direct-nameserver", "proxy-server-nameserver", "default-nameserver"} {
+		for _, server := range dns[key].([]string) {
+			if server == "system" || strings.Contains(server, "dhcp://") {
+				t.Fatalf("%s %s", key, server)
+			}
+		}
 	}
 }
 

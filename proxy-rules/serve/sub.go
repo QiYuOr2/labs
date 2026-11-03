@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/QiYuOr2/labs/proxy-rules/internal/rules"
 	"gopkg.in/yaml.v3"
 )
 
@@ -871,6 +872,9 @@ func (p proxy) clash() (map[string]any, bool) {
 	if p.RawClash != nil {
 		out := cloneMap(p.RawClash)
 		out["name"] = p.Name
+		if udp, ok := p.clashUDP(); ok {
+			out["udp"] = udp
+		}
 		return out, true
 	}
 	if !hostOK(p.Server) || !portOK(p.Port) {
@@ -885,9 +889,6 @@ func (p proxy) clash() (map[string]any, bool) {
 		out["type"] = "ss"
 		out["cipher"] = p.Cipher
 		out["password"] = p.Password
-		if p.UDP {
-			out["udp"] = true
-		}
 		if p.Obfs == "http" || p.Obfs == "tls" {
 			out["plugin"] = "obfs"
 			opts := map[string]any{"mode": p.Obfs}
@@ -917,9 +918,6 @@ func (p proxy) clash() (map[string]any, bool) {
 		out["cipher"] = "auto"
 		if p.TLS {
 			out["tls"] = true
-		}
-		if p.UDP {
-			out["udp"] = true
 		}
 		if p.Network == "ws" {
 			out["network"] = "ws"
@@ -971,9 +969,6 @@ func (p proxy) clash() (map[string]any, bool) {
 				out["ws-opts"] = ws
 			}
 		}
-		if p.UDP {
-			out["udp"] = true
-		}
 	case "trojan":
 		if p.Password == "" {
 			return nil, false
@@ -982,9 +977,6 @@ func (p proxy) clash() (map[string]any, bool) {
 		out["password"] = p.Password
 		if p.SNI != "" {
 			out["sni"] = p.SNI
-		}
-		if p.UDP {
-			out["udp"] = true
 		}
 		if p.Network == "ws" {
 			out["network"] = "ws"
@@ -1036,9 +1028,11 @@ func (p proxy) clash() (map[string]any, bool) {
 			out["sni"] = p.SNI
 		}
 		out["alpn"] = []string{first(p.Alpn, "h3")}
-		out["udp"] = true
 	default:
 		return nil, false
+	}
+	if udp, ok := p.clashUDP(); ok {
+		out["udp"] = udp
 	}
 	return out, true
 }
@@ -1277,6 +1271,20 @@ func srType(typ string) string {
 // fallback_udp_policy instead of the node, which breaks games and WebRTC.
 func (p proxy) qxUDPRelay() bool {
 	return p.UDP || !p.UDPSet
+}
+
+// clashUDP is the udp flag written into a Clash proxy.
+// UDP-capable types default to true when the source says nothing, because a
+// missing udp makes mihomo skip that proxy for UDP and keep matching.
+// An explicit false stays false. http and any other type are left untouched.
+func (p proxy) clashUDP() (bool, bool) {
+	if !rules.ClashUDPCapable(p.Type) {
+		return false, false
+	}
+	if p.UDPSet && !p.UDP {
+		return false, true
+	}
+	return true, true
 }
 
 // qxUDPTypes are the Quantumult X server types that the official sample.conf
