@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/QiYuOr2/labs/proxy-rules/internal/rules"
 )
 
 const (
@@ -44,6 +46,8 @@ func Shadowrocket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		body = mergeShadowrocket(body, subscription)
+	} else {
+		body = ensureShadowrocketLeak(body)
 	}
 	body = setUpdateURL(body, publicSR(raw))
 	writeText(w, r, "text/plain; charset=utf-8", body)
@@ -166,10 +170,180 @@ func mergeShadowrocket(config, subscription string) string {
 			config = updated
 		}
 	}
+	config = ensureShadowrocketLeak(config)
 	if dns != "" {
-		config = replaceDNS(config, dns)
+		config = appendSRDNS(config, dns)
 	}
 	return config
+}
+
+// ensureShadowrocketLeak puts the leak block back after a subscription merge.
+// An existing key is kept. dns-server or fallback-dns-server set to the
+// system token is replaced, because that token is the ISP resolver.
+func ensureShadowrocketLeak(config string) string {
+	config = ensureSRGeneral(config)
+	return ensureSRRules(config)
+}
+
+func ensureSRGeneral(config string) string {
+	lines := strings.Split(normalize(config), "\n")
+	start, end := sectionSpan(lines, "[General]")
+	if start < 0 {
+		return config
+	}
+	body := append([]string{}, lines[start+1:end]...)
+	doh := rules.DomesticDoH()
+	keys := map[string]bool{}
+	for i, line := range body {
+		key := generalKey(line)
+		if key == "" {
+			continue
+		}
+		if (key == "dns-server" || key == "fallback-dns-server") && generalValueIsSystem(line) {
+			body[i] = key + " = " + doh
+			line = body[i]
+		}
+		keys[key] = true
+	}
+	var add []string
+	for _, line := range rules.ShadowrocketLeakGeneral() {
+		key := generalKey(line)
+		if keys[key] {
+			continue
+		}
+		add = append(add, line)
+		keys[key] = true
+	}
+	if len(add) > 0 {
+		body = insertBeforeTrailingBlanks(body, add)
+	}
+	return joinSection(lines, start, end, body)
+}
+
+func ensureSRRules(config string) string {
+	if strings.Contains(strings.ToLower(config), "domain-keyword,stun,") {
+		return config
+	}
+	lines := strings.Split(normalize(config), "\n")
+	start, end := sectionSpan(lines, "[Rule]")
+	if start < 0 {
+		return config
+	}
+	body := append(append([]string{}, rules.ShadowrocketStunRules()...), lines[start+1:end]...)
+	return joinSection(lines, start, end, body)
+}
+
+func appendSRDNS(config, dns string) string {
+	_, value, ok := strings.Cut(dns, "=")
+	if !ok {
+		return config
+	}
+	var extra []string
+	for _, part := range splitCSV(value) {
+		if srDNSPartOK(part) {
+			extra = append(extra, part)
+		}
+	}
+	if len(extra) == 0 {
+		return config
+	}
+	lines := strings.Split(normalize(config), "\n")
+	for i, line := range lines {
+		if generalKey(line) != "dns-server" {
+			continue
+		}
+		_, current, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		have := map[string]struct{}{}
+		var parts []string
+		for _, part := range splitCSV(current) {
+			parts = append(parts, part)
+			have[strings.ToLower(part)] = struct{}{}
+		}
+		for _, part := range extra {
+			if _, ok := have[strings.ToLower(part)]; ok {
+				continue
+			}
+			parts = append(parts, part)
+			have[strings.ToLower(part)] = struct{}{}
+		}
+		lines[i] = "dns-server = " + strings.Join(parts, ",")
+		return strings.Join(lines, "\n")
+	}
+	return config
+}
+
+func srDNSPartOK(part string) bool {
+	if part == "" || strings.EqualFold(part, "system") {
+		return false
+	}
+	lower := strings.ToLower(part)
+	return !strings.Contains(lower, "localhost") && !strings.Contains(lower, "127.0.0.1") && !strings.Contains(lower, "0.0.0.0")
+}
+
+func generalValueIsSystem(line string) bool {
+	_, value, ok := strings.Cut(line, "=")
+	if !ok {
+		return false
+	}
+	parts := splitCSV(value)
+	if len(parts) == 0 {
+		return false
+	}
+	for _, part := range parts {
+		if !strings.EqualFold(part, "system") {
+			return false
+		}
+	}
+	return true
+}
+
+func generalKey(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "//") {
+		return ""
+	}
+	key, _, ok := strings.Cut(trimmed, "=")
+	if !ok {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(key))
+}
+
+func sectionSpan(lines []string, header string) (int, int) {
+	start := -1
+	end := len(lines)
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.EqualFold(trimmed, header) {
+			start = i
+			continue
+		}
+		if start >= 0 && i > start && isHeader(trimmed) {
+			return start, i
+		}
+	}
+	return start, end
+}
+
+func joinSection(lines []string, start, end int, body []string) string {
+	out := append([]string{}, lines[:start+1]...)
+	out = append(out, body...)
+	out = append(out, lines[end:]...)
+	return strings.Join(out, "\n")
+}
+
+func insertBeforeTrailingBlanks(body, add []string) []string {
+	i := len(body)
+	for i > 0 && strings.TrimSpace(body[i-1]) == "" {
+		i--
+	}
+	out := append([]string{}, body[:i]...)
+	out = append(out, add...)
+	out = append(out, body[i:]...)
+	return out
 }
 
 func shadowrocketProxies(body string) []string {
@@ -234,14 +408,4 @@ func dnsAllowed(line string) bool {
 		return false
 	}
 	return strings.Contains(line, "=") && strings.TrimSpace(strings.SplitN(line, "=", 2)[1]) != ""
-}
-
-func replaceDNS(config, dns string) string {
-	lines := strings.Split(normalize(config), "\n")
-	for i, line := range lines {
-		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "dns-server") {
-			lines[i] = dns
-		}
-	}
-	return strings.Join(lines, "\n")
 }

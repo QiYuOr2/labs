@@ -113,13 +113,27 @@ func TestShadowrocketMergesProxyAndDNS(t *testing.T) {
 		"DOMAIN-SUFFIX,one.example,🎯 全球直连",
 		"日本 = ss, example.com, 443, encrypt-method=aes-128-gcm, password=secret",
 		"[Proxy Group]\n🤖 AI = select,DIRECT",
-		"dns-server = 223.5.5.5",
+		"dns-server = " + rules.DomesticDoH() + ",223.5.5.5",
+		"direct-dns-server = " + rules.DomesticDoH(),
+		"fallback-dns-server = " + rules.DomesticDoH(),
+		"dns-direct-system = false",
+		"always-real-ip = false",
+		"udp-policy-not-supported-behaviour = REJECT",
+		"DOMAIN-KEYWORD,stun,默认代理",
 		"update-url = https://proxy-rules.vercel.app/api/sr?url=https%3A%2F%2Fexample.com%2Fairport",
 		"[Host]",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing %s\n%s", want, body)
 		}
+	}
+	if strings.Contains(body, "dns-server = system") || strings.Contains(body, "fallback-dns-server = system") {
+		t.Fatalf("system resolver restored\n%s", body)
+	}
+	stunAt := strings.Index(body, "DOMAIN-KEYWORD,stun,默认代理")
+	geoAt := strings.Index(body, "GEOIP,CN,🎯 全球直连")
+	if stunAt < 0 || geoAt < 0 || stunAt > geoAt {
+		t.Fatalf("stun rule fell behind GEOIP\n%s", body)
 	}
 	if strings.Contains(body, "127.0.0.1") || strings.Contains(body, "evil.example") || strings.Contains(body, "passphrase") || strings.Contains(body, "https://example.com/one.list") {
 		t.Fatalf("copied unwanted content\n%s", body)

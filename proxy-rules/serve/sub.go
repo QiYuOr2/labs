@@ -81,7 +81,11 @@ func NodesForQuantumultX(body string) (local, remote, dns []string) {
 func NodesForShadowrocket(body string) (proxies []string, dns string) {
 	b := parseBundle(body)
 	if len(b.srProxy) > 0 {
-		return b.srProxy, b.srDNS
+		out := make([]string, len(b.srProxy))
+		for i, line := range b.srProxy {
+			out[i] = ensureSRUDPRelay(line)
+		}
+		return out, b.srDNS
 	}
 	for _, item := range b.proxies {
 		if line, ok := item.sr(); ok {
@@ -747,9 +751,7 @@ func (p proxy) sr() (string, bool) {
 		typ = "ss"
 		add("encrypt-method", p.Cipher)
 		add("password", p.Password)
-		if p.UDP {
-			add("udp-relay", "true")
-		}
+		p.maybeSRUDP(add)
 		if p.Obfs == "http" || p.Obfs == "tls" {
 			add("obfs", p.Obfs)
 			add("obfs-host", p.ObfsParam)
@@ -782,9 +784,7 @@ func (p proxy) sr() (string, bool) {
 				add("ws-headers", "Host:"+p.Host)
 			}
 		}
-		if p.UDP {
-			add("udp-relay", "true")
-		}
+		p.maybeSRUDP(add)
 	case "vless":
 		if p.UUID == "" || (p.Network == "grpc" && p.PublicKey == "") {
 			return "", false
@@ -805,9 +805,7 @@ func (p proxy) sr() (string, bool) {
 			add("reality-public-key", p.PublicKey)
 			add("reality-short-id", p.ShortID)
 		}
-		if p.UDP {
-			add("udp-relay", "true")
-		}
+		p.maybeSRUDP(add)
 	case "trojan":
 		if p.Password == "" {
 			return "", false
@@ -823,9 +821,7 @@ func (p proxy) sr() (string, bool) {
 				add("ws-headers", "Host:"+p.Host)
 			}
 		}
-		if p.UDP {
-			add("udp-relay", "true")
-		}
+		p.maybeSRUDP(add)
 		if p.SkipCert {
 			add("skip-cert-verify", "true")
 		}
@@ -848,7 +844,7 @@ func (p proxy) sr() (string, bool) {
 		typ = "hysteria2"
 		add("password", p.Password)
 		add("sni", p.SNI)
-		add("udp-relay", "true")
+		p.maybeSRUDP(add)
 		if p.SkipCert {
 			add("skip-cert-verify", "true")
 		}
@@ -860,7 +856,7 @@ func (p proxy) sr() (string, bool) {
 		add("uuid", p.UUID)
 		add("password", p.Password)
 		add("sni", p.SNI)
-		add("udp-relay", "true")
+		p.maybeSRUDP(add)
 		add("alpn", first(p.Alpn, "h3"))
 	default:
 		return "", false
@@ -1271,6 +1267,56 @@ func srType(typ string) string {
 // fallback_udp_policy instead of the node, which breaks games and WebRTC.
 func (p proxy) qxUDPRelay() bool {
 	return p.UDP || !p.UDPSet
+}
+
+// srUDPRelay is the Shadowrocket form of the same default.
+// A missing flag becomes on. An explicit false stays off, including hysteria2
+// and tuic, which otherwise always speak UDP.
+func (p proxy) srUDPRelay() bool {
+	return p.UDP || !p.UDPSet
+}
+
+func (p proxy) maybeSRUDP(add func(string, string)) {
+	if srUDPCapable(p.Type) && p.srUDPRelay() {
+		add("udp-relay", "true")
+	}
+}
+
+// srUDPCapable types are the ones this project already writes with udp-relay.
+// http, https, socks5 and ssr stay untouched. hysteria2/tuic samples in
+// LOWERTOP use udp=1; this repo's lines and tests already use udp-relay,
+// so the same key is filled in rather than a second flag.
+func srUDPCapable(typ string) bool {
+	switch strings.ToLower(typ) {
+	case "ss", "vmess", "vless", "trojan", "hysteria", "hysteria2", "tuic":
+		return true
+	default:
+		return false
+	}
+}
+
+// ensureSRUDPRelay adds udp-relay=true to a native Shadowrocket proxy line
+// that says nothing about UDP. udp-relay=false and udp=0/udp=1 are kept.
+func ensureSRUDPRelay(line string) string {
+	_, rest, ok := strings.Cut(line, "=")
+	if !ok {
+		return line
+	}
+	parts := splitCSV(rest)
+	if len(parts) < 3 || !srUDPCapable(parts[0]) {
+		return line
+	}
+	for _, part := range parts[3:] {
+		key, _, found := strings.Cut(part, "=")
+		if !found {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "udp-relay", "udp":
+			return line
+		}
+	}
+	return strings.TrimRight(line, " ") + ", udp-relay=true"
 }
 
 // clashUDP is the udp flag written into a Clash proxy.
