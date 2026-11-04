@@ -402,6 +402,63 @@ func assertLeakFixes(t *testing.T, out map[string]any) {
 	}
 }
 
+// TestFlClashLocalInlinesAI locks the local override to an inlined AI list.
+// Cindy must resolve through the AI group even while the remote list is stale.
+func TestFlClashLocalInlinesAI(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Fatal("node is required")
+	}
+	root := moduleRoot(t)
+	files, err := Render(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	script, ok := files[fileFlClashLocal]
+	if !ok {
+		t.Fatal("missing local FlClash script")
+	}
+	out := runScript(t, script, map[string]any{
+		"mode":         "global",
+		"proxies":      []map[string]string{{"name": "日本-1"}, {"name": "美国-1"}},
+		"rules":        []string{"MATCH,OLD"},
+		"proxy-groups": []any{map[string]any{"name": "OLD"}},
+	})
+	ai := clashName(aiGroupName)
+	rules := out["rules"].([]any)
+	if len(rules) == 0 {
+		t.Fatal("local script produced no rules")
+	}
+	want := []string{
+		"DOMAIN-SUFFIX,cindy.app," + ai,
+		"DOMAIN-SUFFIX,cindy.com.cn," + ai,
+		"DOMAIN-SUFFIX,cindy.cn," + ai,
+	}
+	text := make([]string, len(rules))
+	for i, rule := range rules {
+		text[i] = rule.(string)
+	}
+	for _, line := range want {
+		at := indexOf(text, line)
+		if at < 0 {
+			t.Fatalf("missing inlined rule %s", line)
+		}
+		if at > indexOf(text, "GEOIP,") {
+			t.Fatalf("inlined rule %s is not ahead of GEOIP", line)
+		}
+	}
+	providers := out["rule-providers"].(map[string]any)
+	for _, provider := range providers {
+		url, _ := provider.(map[string]any)["url"].(string)
+		if strings.Contains(url, "proxy-rules/rules/ai.list") {
+			t.Fatalf("local script still wants the remote AI list: %s", url)
+		}
+	}
+	last := rules[len(rules)-1].(string)
+	if !strings.HasPrefix(last, "MATCH,") {
+		t.Fatalf("last rule = %s", last)
+	}
+}
+
 func srPolicyLine(text, name string) string {
 	prefix := name + " = "
 	for _, line := range strings.Split(text, "\n") {

@@ -14,16 +14,17 @@ const rawBase = "https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules
 
 const (
 	fileFlClash      = "clients/flclash.js"
+	fileFlClashLocal = "clients/flclash.local.js"
 	fileQuantumultX  = "clients/quantumultx.conf"
 	fileShadowrocket = "clients/shadowrocket.conf"
 )
 
 // ClientFiles are the converted configs published from main.
 func ClientFiles() []string {
-	return []string{fileFlClash, fileQuantumultX, fileShadowrocket}
+	return []string{fileFlClash, fileFlClashLocal, fileQuantumultX, fileShadowrocket}
 }
 
-// Render converts config/all.ini into the three client files.
+// Render converts config/all.ini into the client files.
 func Render(root string) (map[string]string, error) {
 	ini, err := readSource(root, filepath.Join("config", "all.ini"))
 	if err != nil {
@@ -47,7 +48,11 @@ func Render(root string) (map[string]string, error) {
 	if _, err := readSource(root, filepath.Join("rules", "geoip-cn.list")); err != nil {
 		return nil, err
 	}
-	return buildClients(cfg, rewrites), nil
+	aiRules, err := parseAITypes(aiList)
+	if err != nil {
+		return nil, err
+	}
+	return buildClients(cfg, rewrites, aiRules), nil
 }
 
 // Write stores rendered client files under root.
@@ -149,9 +154,10 @@ type specRule struct {
 	Param    string `json:"param,omitempty"`
 }
 
-func buildClients(cfg Config, rewrites []string) map[string]string {
+func buildClients(cfg Config, rewrites []string, aiRules []aiEntry) map[string]string {
 	return map[string]string{
 		fileFlClash:      renderFlClash(cfg),
+		fileFlClashLocal: renderFlClashLocal(cfg, aiRules),
 		fileQuantumultX:  renderQuantumultX(cfg, rewrites),
 		fileShadowrocket: renderShadowrocket(cfg),
 	}
@@ -245,8 +251,14 @@ func renderFlClash(cfg Config) string {
 	b.WriteString("  config.mode = \"rule\";\n")
 	b.WriteString("  applyLeakFixes(config);\n")
 	b.WriteString("  return config;\n")
-	b.WriteString("}\n")
-	b.WriteString("\n")
+	b.WriteString("}\n\n")
+	b.WriteString(clashScriptTail())
+	return b.String()
+}
+
+// clashScriptTail is the shared helper half of every FlClash override script.
+func clashScriptTail() string {
+	var b strings.Builder
 	b.WriteString("function stripNodeEmoji(config) {\n")
 	b.WriteString("  var list = config.proxies;\n")
 	b.WriteString("  if (!list || !list.length) {\n")

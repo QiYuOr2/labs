@@ -83,3 +83,10 @@ DOMAIN-SUFFIX,grazie.ai
 DOMAIN-SUFFIX,jetbrains.ai
 DOMAIN-SUFFIX,manus.im
 DOMAIN-SUFFIX,manuscdn.com
+
+# Cindy。官网和客户端服务。服务端地址见 makecindy/cindy 的 config/endpoint*.json。
+# cindy.app 是国际版，cindy.com.cn 是中国大陆版，cindy.cn 是中国大陆官网。
+# 不要写成 xd.cn 或 github.com：前者还有别的产品，后者是 GitHub 本身。
+DOMAIN-SUFFIX,cindy.app
+DOMAIN-SUFFIX,cindy.com.cn
+DOMAIN-SUFFIX,cindy.cn

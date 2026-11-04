@@ -1,12 +1,13 @@
 # 订阅规则
 
-规则在这个目录里维护。改 `config/all.ini` 或 `rules/` 后直接推送，GitHub Action 用 Go 生成三份配置并提交回同一个分支。不用在本地跑命令。推到 `main` 之后，客户端只填已经生成好的文件链接。没有在线转换，也不会把机场地址发给别人。
+规则在这个目录里维护。改 `config/all.ini` 或 `rules/` 后直接推送，GitHub Action 用 Go 生成客户端配置并提交回同一个分支。不用在本地跑命令。推到 `main` 之后，客户端只填已经生成好的文件链接。没有在线转换，也不会把机场地址发给别人。
 
 仓库里的静态文件只负责策略组和远程分流，不保存机场地址。要把名单展开进同一份配置，用文末的合并服务。
 
 推到 `main` 之前，这些静态链接是 404：
 
 - FlClash 覆写脚本：`https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/flclash.js`
+- FlClash 本地扩展：`clients/flclash.local.js`。它把 AI 名单写死在脚本里，从本地文件导入，不走 URL。
 - Quantumult X 配置：`https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/quantumultx.conf`
 - Shadowrocket 配置：`https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/shadowrocket.conf`
 
@@ -24,6 +25,16 @@
 脚本留下机场的节点和 `proxy-providers`，换掉策略组和规则。不改端口，也不打开 `allow-lan`。
 
 静态 `flclash.js` 里的广告、AI、流媒体名单仍是远程文件。要展开进脚本里，用下面的「FlClash 展开」。
+
+### 本地扩展
+
+`clients/flclash.local.js` 是同一份脚本的本地版本，区别只在 AI：`rules/ai.list` 直接写进脚本，不再走远程 RULE-SET。改完 `rules/ai.list` 立即生效，不用等 GitHub Action 生成，也不用等客户端的名单缓存过期。
+
+1. 先在 `proxy-rules` 目录跑 `go run ./cmd/render`，把 `rules/ai.list` 写进这个文件。
+2. FlClash 配置，扩展，脚本，从本地文件导入 `proxy-rules/clients/flclash.local.js`，再关联到配置。
+3. 只在需要试新域名时用它。长期照旧用远端的 `flclash.js`，那样改名单只需要推送，不用重新导入。
+
+其他名单仍是远程。它和 `flclash.js` 一样只换策略组、规则和 `mode`，不改节点，不打开 `allow-lan`。
 
 Clash 不能跑 Quantumult X 的重写脚本。去广告靠分流里的 REJECT。
 
@@ -99,7 +110,9 @@ GitHub Actions 不能接这个请求。它只在推送后生成静态文件。�
 
 「🤖 AI」只有手动选择：日本、台湾、新加坡、美国、全部节点、DIRECT。没有香港，没有自动选择，没有故障转移，也没有「🚀 默认代理」。默认代理那一组里面带了自动选择和故障转移，AI 流量再跳进去就会换节点。
 
-名单在 `rules/ai.list`，只收具体产品域名，例如 OpenAI、Claude、Google AI、Grok、Perplexity、Cursor、Copilot、Mistral、Groq、OpenRouter、Hugging Face、Midjourney、Suno、Poe。不收 `auth0`、`stripe`、`sentry`、`amazonaws`、`cloudflare`、`googleapis`、`www.bing.com` 这种会被大量无关网站命中的域名，也不收 DeepSeek、Kimi、豆包。
+名单在 `rules/ai.list`，只收具体产品域名，例如 OpenAI、Claude、Google AI、Grok、Perplexity、Cursor、Copilot、Mistral、Groq、OpenRouter、Hugging Face、Midjourney、Suno、Poe、Cindy。不收 `auth0`、`stripe`、`sentry`、`amazonaws`、`cloudflare`、`googleapis`、`www.bing.com` 这种会被大量无关网站命中的域名，也不收 DeepSeek、Kimi、豆包。
+
+Cindy 只收 `cindy.app`、`cindy.com.cn`、`cindy.cn` 三个后缀。国际版、中国大陆版服务和官网都在里面；`github.com/makecindy` 是 GitHub 本身，`protocol.xd.cn` 属于别的产品，都不要写进 AI。
 
 其他组的默认值：
 
@@ -126,7 +139,11 @@ Cats-Team 全量广告名单大约 7MB，默认不内联。确实要开时，去
 
 ## 改规则
 
-改 `config/all.ini` 或 `rules/` 后直接推送。Action 会跑测试和 `check`，再生成 `clients/` 里的三份配置并提交。拉一次远程就能看到新文件。客户端里更新对应链接。
+改 `config/all.ini` 或 `rules/` 后直接推送。Action 会跑测试和 `check`，再生成 `clients/` 里的四份文件并提交。拉一次远程就能看到新文件。客户端里更新对应链接。
+
+`clients/` 里有两份 FlClash 脚本：`flclash.js` 给客户端订阅远程用，`flclash.local.js` 把 AI 名单写死在脚本里，供本地导入。两份都由 `cmd/render` 生成，不要手改。
+
+AI 名单只改 `rules/ai.list` 时，`flclash.js`、`quantumultx.conf`、`shadowrocket.conf` 的内容不会变，因为它们引用的是远程名单地址。这是有意的：不用重新下载配置，客户端下次拉名单时就会拿到新域名。要立刻在本地生效，重新跑 `cmd/render` 再导入 `flclash.local.js`。
 
 Action 用仓库自带的 `GITHUB_TOKEN` 推送，这个推送不会再次触发 Action。分支如果禁止 Actions 写入，要在仓库设置里允许 GitHub Actions 推送。
 
