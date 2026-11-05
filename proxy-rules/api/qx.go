@@ -1445,14 +1445,13 @@ const maxUpload = 2 << 20
 
 func handleDelete(w http.ResponseWriter, r *http.Request, client string) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
-	path, err := serve.SubPath(client, id)
-	if err != nil {
+	if _, err := serve.SubPath(client, id); err != nil {
 		writeError(w, "链接无效", http.StatusBadRequest)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	if err := serve.DeleteText(ctx, path); err != nil {
+	if err := serve.DeleteLink(ctx, client, id); err != nil {
 		status := http.StatusBadGateway
 		if err.Error() == "存储还没配好" {
 			status = http.StatusServiceUnavailable
@@ -1469,6 +1468,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request, client string) {
 		writeError(w, "链接无效", http.StatusBadRequest)
 		return
 	}
+	update := strings.TrimSpace(r.URL.Query().Get("update"))
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		if id == "" {
 			writeError(w, "链接无效", http.StatusBadRequest)
@@ -1480,6 +1480,22 @@ func handleUpload(w http.ResponseWriter, r *http.Request, client string) {
 	if r.Method != http.MethodPost {
 		writeError(w, "只接受 POST", http.StatusMethodNotAllowed)
 		return
+	}
+	if id != "" {
+		// Overwriting one link is the update path. It stays open so a
+		// bookmark keeps working; ?update= is only the extra permission the
+		// page asks for before it replaces a link that was not saved here.
+		checkCtx, checkCancel := context.WithTimeout(r.Context(), 15*time.Second)
+		checkErr := checkUpdate(checkCtx, client, id, update)
+		checkCancel()
+		if checkErr != nil {
+			status := http.StatusNotFound
+			if checkErr.Error() == "存储还没配好" {
+				status = http.StatusServiceUnavailable
+			}
+			writeError(w, checkErr.Error(), status)
+			return
+		}
 	}
 	payload, err := io.ReadAll(io.LimitReader(r.Body, maxUpload+1))
 	if err != nil {
@@ -1526,13 +1542,50 @@ func handleUpload(w http.ResponseWriter, r *http.Request, client string) {
 		writeError(w, err.Error(), status)
 		return
 	}
-	log.Printf("qx upload client=%s bytes=%d ok", client, len(payload))
+	// One key per link, kept out of the download URL. The page shows it once
+	// so a link saved in another browser can still be replaced later.
+	key, err := serve.EnsureUpdateKey(ctx, client, id)
+	if err != nil && err.Error() != "存储还没配好" {
+		log.Printf("qx update key client=%s failed", client)
+	}
+	log.Printf("qx upload client=%s bytes=%d update=%t ok", client, len(payload), id != "")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(struct {
-		URL string `json:"url"`
-	}{URL: link})
+		URL       string `json:"url"`
+		UpdateKey string `json:"updateKey,omitempty"`
+	}{URL: link, UpdateKey: key})
 }
+
+// checkUpdate accepts a matching ?update= before one stored link is replaced.
+// A link with no key is downloadable by anyone, so the page may replace it.
+func checkUpdate(ctx context.Context, client, id, key string) error {
+	path, err := serve.SubPath(client, id)
+	if err != nil {
+		return err
+	}
+	stored, err := serve.UpdateKey(ctx, client, id)
+	if err != nil && err.Error() != "存储还没配好" {
+		return err
+	}
+	if stored == "" {
+		// Links made before keys existed stay writable, otherwise every client
+		// that already points at one could never be corrected.
+		if _, err := serve.LoadTextSaved(ctx, path); err != nil {
+			if serve.IsNotFound(err) {
+				return errNoUpdate
+			}
+			return err
+		}
+		return nil
+	}
+	if key == "" || key != stored {
+		return errNoUpdate
+	}
+	return nil
+}
+
+var errNoUpdate = fmt.Errorf("链接无效，或更新密钥不对")
 
 func writeStored(w http.ResponseWriter, r *http.Request, client, id string) {
 	path, err := serve.SubPath(client, id)

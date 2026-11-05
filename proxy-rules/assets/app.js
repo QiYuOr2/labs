@@ -8,19 +8,22 @@
       name: "Quantumult X",
       needs: true,
       hint: "作为完整配置下载，不要加到节点订阅。重写要生效，打开 MitM 并信任证书。",
-      uploaded: "作为完整配置下载。节点和 DNS 来自上传的文件。文件里如果是节点正文，更新前不会变；如果只有订阅地址，Quantumult X 还会自己拉。重写要生效，打开 MitM 并信任证书。"
+      uploaded: "作为完整配置下载。节点和 DNS 来自上传的文件。文件里如果是节点正文，更新前不会变；如果只有订阅地址，Quantumult X 还会自己拉。重写要生效，打开 MitM 并信任证书。",
+      updated: "新文件已经保存到同一条链接。地址没有变，文件里如果是节点正文，Quantumult X 下次拉取时才会拿到新的。"
     },
     sr: {
       name: "Shadowrocket",
       needs: true,
       hint: "作为配置下载，不要填到节点订阅。订阅不是小火箭配置时，节点仍在首页添加。",
-      uploaded: "作为配置下载。节点和 DNS 来自上传的文件，三种客户端格式都会转成小火箭节点。要换节点就再传一次。"
+      uploaded: "作为配置下载。节点和 DNS 来自上传的文件，三种客户端格式都会转成小火箭节点。要换节点就再传一次。",
+      updated: "新文件已经保存到同一条链接。地址没有变，小火箭下次更新配置时才会拿到新的。"
     },
     flclash: {
       name: "Clash",
       needs: false,
       hint: "不上传文件时，这个地址是覆写脚本，不包含节点。上传配置后得到完整 Clash 订阅。",
-      uploaded: "作为 Clash 配置订阅导入，不要填进覆写脚本。允许局域网是关的。节点来自上传的文件，分流用这边的规则。"
+      uploaded: "作为 Clash 配置订阅导入，不要填进覆写脚本。允许局域网是关的。节点来自上传的文件，分流用这边的规则。",
+      updated: "新文件已经保存到同一条链接。地址没有变，Clash 下次更新订阅时才会拿到新的。"
     }
   };
 
@@ -43,10 +46,20 @@
   var link = document.querySelector("#link");
   var copy = document.querySelector("#copy");
   var remove = document.querySelector("#remove");
+  var updateBtn = document.querySelector("#update");
+  var updater = document.querySelector("#updater");
+  var updateNote = document.querySelector("#update-note");
+  var upLink = document.querySelector("#up-link");
+  var upKey = document.querySelector("#up-key");
+  var upSave = document.querySelector("#up-save");
+  var upForget = document.querySelector("#up-forget");
+  var upCancel = document.querySelector("#up-cancel");
   var qr = document.querySelector("#qr");
   var buttons = document.querySelectorAll("[data-client]");
   var current = "qx";
   var ticket = 0;
+  // The link the next upload replaces: { client, id, key }.
+  var activeTarget = null;
   try {
     var saved = sessionStorage.getItem("rules-client");
     if (clients[saved]) {
@@ -139,7 +152,23 @@
       done();
     }
   });
-  remove.addEventListener("click", function () {
+  if (remove) {
+    remove.addEventListener("click", removeLink);
+  }
+  if (updateBtn) {
+    updateBtn.addEventListener("click", openUpdater);
+  }
+  if (upSave) {
+    upSave.addEventListener("click", saveUpdater);
+  }
+  if (upForget) {
+    upForget.addEventListener("click", forgetLinkKey);
+  }
+  if (upCancel) {
+    upCancel.addEventListener("click", closeUpdater);
+  }
+
+  function removeLink() {
     var owned = ownStored(link.textContent);
     if (!owned) {
       return;
@@ -164,6 +193,7 @@
         return;
       }
       forgetId(owned.client, owned.id);
+      forgetKey(owned.client, owned.id);
       if (sameStored(normalize(input.value), owned)) {
         input.value = "";
         file.value = "";
@@ -173,6 +203,7 @@
         edit.textContent = "编辑";
         input.classList.remove("editing");
       }
+      closeUpdater();
       hideResult();
       render(false);
       warning.textContent = "已删除";
@@ -182,7 +213,7 @@
       }
       warning.textContent = "删除失败";
     });
-  });
+  }
 
   render(false);
 
@@ -197,11 +228,19 @@
     var config = isConfig(raw);
     make.hidden = !config;
     var owned = ownStored(raw);
-    if (owned) {
+    if (owned && !sameAsTarget(owned)) {
       ticket += 1;
       make.hidden = true;
       warning.textContent = "";
       showLink(owned.url, "已保存的配置。删除后这条链接失效。");
+      return;
+    }
+    // An update target turns the upload button into a save. Nothing to send
+    // yet until a new file is in the box.
+    make.hidden = !config;
+    if (owned) {
+      warning.textContent = "正在修改这条链接。换一个文件后点「更新」保存，地址不变。";
+      hideResult();
       return;
     }
     if (!config) {
@@ -227,7 +266,7 @@
       upload();
       return;
     }
-    warning.textContent = "";
+    warning.textContent = !send && idleHint();
     hideResult();
   }
 
@@ -400,12 +439,23 @@
     }
     var mine = ++ticket;
     var client = current;
+    // An update target wins over the id saved in this tab: the file is going
+    // to the link the user typed, not to the one they saved earlier.
+    var to = target();
+    if (!to) {
+      var stored = storedId(client);
+      if (stored) {
+        to = { client: client, id: stored };
+      }
+    }
     warning.textContent = "正在生成";
     hideResult();
     var endpoint = origin + "/api/qx?client=" + encodeURIComponent(client);
-    var stored = storedId(client);
-    if (stored) {
-      endpoint += "&id=" + encodeURIComponent(stored);
+    if (to) {
+      endpoint += "&id=" + encodeURIComponent(to.id);
+      if (to.key) {
+        endpoint += "&update=" + encodeURIComponent(to.key);
+      }
     }
     fetch(endpoint, {
       method: "POST",
@@ -420,7 +470,9 @@
         return;
       }
       if (!response.ok) {
-        warning.textContent = failureText(response.status, response.text);
+        warning.textContent = response.status === 404
+          ? "这条配置不存在，或更新密钥不对"
+          : failureText(response.status, response.text);
         return;
       }
       var payload;
@@ -437,9 +489,11 @@
       var id = idFrom(payload.url);
       if (id) {
         rememberId(client, id);
+        rememberKey(client, id, payload.updateKey || (to && to.key) || "");
       }
+      closeUpdater();
       warning.textContent = "";
-      showLink(payload.url, clients[client].uploaded);
+      showLink(payload.url, to ? clients[client].updated : clients[client].uploaded);
     }).catch(function (error) {
       if (mine !== ticket) {
         return;
@@ -447,6 +501,25 @@
       var detail = error && error.message ? String(error.message) : "";
       warning.textContent = detail ? "生成失败 " + detail : "生成失败";
     });
+  }
+
+  // forgetLinkKey drops the key of one link when the user asks to stop
+  // updating it. It is used by the updater after a key was saved by mistake.
+  function forgetLinkKey() {
+    var to = target();
+    if (!to) {
+      return;
+    }
+    if (!window.confirm("忘记这条链接的密钥？之后就不能在这台设备上更新它了。")) {
+      return;
+    }
+    forgetKey(to.client, to.id);
+    setTarget({ client: to.client, id: to.id, key: "" });
+    if (upKey) {
+      upKey.value = "";
+    }
+    warning.textContent = "已忘记这条链接的密钥";
+    render(false);
   }
 
   function showLink(ready, text) {
@@ -462,14 +535,133 @@
       note.textContent = "链接太长，二维码装不下。复制上面的地址即可。";
       qr.appendChild(note);
     }
-    remove.hidden = !ownStored(ready);
+    var here = ownStored(ready);
+    if (remove) {
+      remove.hidden = !here;
+    }
+    // Only a link this page can address has an update to offer.
+    if (updateBtn) {
+      updateBtn.hidden = !here;
+      if (here) {
+        updateBtn.setAttribute("data-id", here.id);
+        updateBtn.setAttribute("data-client", here.client);
+      }
+    }
+    if (here && !isTarget(here.client, here.id)) {
+      closeUpdater();
+    }
     result.hidden = false;
+  }
+
+  function idleHint() {
+    return target() ? "换一个文件后点「更新」，这条链接的地址不变。" : "";
+  }
+
+  function targetHint() {
+    var to = target();
+    if (!to) {
+      return "";
+    }
+    return "新文件会覆盖 " + ({ qx: "Quantumult X", sr: "Shadowrocket", flclash: "Clash" }[to.client] || to.client) +
+      " 那条链接，地址不变。密钥不对时不会写入。";
+  }
+
+  // openUpdater asks for the link that should be replaced. The id alone is
+  // enough when the link was made here; otherwise the saved key is needed.
+  function openUpdater() {
+    var here = ownStored(link.textContent);
+    if (!here) {
+      return;
+    }
+    var key = knownKey(here.client, here.id);
+    upLink.value = here.url;
+    upKey.value = key || "";
+    updateNote.textContent = key
+      ? "这条链接可以更新。换一个文件，再点「更新」。"
+      : "这条链接没有本机密钥。密钥在上传那一刻给过一次，贴进来才能覆盖。";
+    updateNote.hidden = false;
+    updater.hidden = false;
+    setTarget({ client: here.client, id: here.id, key: key });
+    render(false);
+  }
+
+  function closeUpdater() {
+    if (updater) {
+      updater.hidden = true;
+    }
+    setTarget(null);
+  }
+
+  // saveUpdater checks the two inputs the user typed, then makes that link the
+  // upload target. A bad key is refused by the server before anything is
+  // written, and this check keeps the page from sending an obviously wrong one.
+  function saveUpdater() {
+    var raw = String(upLink.value || "").trim();
+    var key = String(upKey.value || "").trim();
+    var found = ownStored(raw) || idOnly(raw);
+    if (!found) {
+      warning.textContent = "链接里没有 id，先复制生成过的地址";
+      return;
+    }
+    if (key && !/^[0-9a-f]{32}$/.test(key)) {
+      warning.textContent = "更新密钥是 32 位十六进制";
+      return;
+    }
+    if (key) {
+      rememberKey(found.client, found.id, key);
+    } else {
+      key = knownKey(found.client, found.id);
+    }
+    if (current !== found.client) {
+      current = found.client;
+      try {
+        sessionStorage.setItem("rules-client", current);
+      } catch (error) {}
+    }
+    setTarget({ client: found.client, id: found.id, key: key });
+    if (updater) {
+      updater.hidden = true;
+    }
+    render(false);
+    showLink(found.url, targetHint() + " 换一个文件后点「更新」保存。");
+    warning.textContent = "已选中这条链接。换一个文件后点「更新」，地址不变。";
+  }
+
+  // idOnly reads a bare 32 hex id, so the key can be typed next to it.
+  function idOnly(raw) {
+    var text = String(raw || "").trim();
+    if (!/^[0-9a-f]{32}$/.test(text)) {
+      return null;
+    }
+    var client = clients[current] ? current : "qx";
+    var path = client === "sr" ? "/api/sr" : client === "flclash" ? "/api/flclash" : "/api/qx";
+    return { client: client, id: text, url: origin + path + "?id=" + text };
+  }
+
+  function target() {
+    return activeTarget && clients[activeTarget.client] ? activeTarget : null;
+  }
+
+  function setTarget(value) {
+    activeTarget = value;
+  }
+
+  function isTarget(client, id) {
+    var to = target();
+    return !!to && to.client === client && to.id === id;
+  }
+
+  function sameAsTarget(owned) {
+    return isTarget(owned.client, owned.id);
   }
 
   function hideResult() {
     result.hidden = true;
     link.textContent = "";
     qr.replaceChildren();
+    if (updateBtn) {
+      updateBtn.hidden = true;
+    }
   }
 
   function buildLink(client, raw) {
@@ -555,6 +747,35 @@
   function rememberId(client, id) {
     try {
       sessionStorage.setItem("rules-id-" + client, id);
+    } catch (error) {}
+  }
+
+  // The key is what lets another browser replace this link later. It lives in
+  // localStorage, so a closed tab does not lose it.
+  function knownKey(client, id) {
+    try {
+      var value = localStorage.getItem("rules-key-" + client + "-" + id) || "";
+      return /^[0-9a-f]{32}$/.test(value) ? value : "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function rememberKey(client, id, key) {
+    if (!key || !/^[0-9a-f]{32}$/.test(key)) {
+      return false;
+    }
+    try {
+      localStorage.setItem("rules-key-" + client + "-" + id, key);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function forgetKey(client, id) {
+    try {
+      localStorage.removeItem("rules-key-" + client + "-" + id);
     } catch (error) {}
   }
 

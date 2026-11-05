@@ -167,8 +167,70 @@ func DeleteText(ctx context.Context, path string) error {
 	return currentStore().Delete(ctx, path)
 }
 
+// DeleteLink removes one merged subscription and the key that updates it.
+func DeleteLink(ctx context.Context, client, id string) error {
+	path, err := SubPath(client, id)
+	if err != nil {
+		return err
+	}
+	if err := currentStore().Delete(ctx, path); err != nil {
+		return err
+	}
+	keyPath, err := UpdateKeyPath(client, id)
+	if err != nil {
+		return err
+	}
+	return currentStore().Delete(ctx, keyPath)
+}
+
 // PublicBase is the configured public origin.
 func PublicBase() string { return publicBase() }
+
+// UpdateKeyPath is where one link keeps the key that allows a new file to
+// replace it. The key never appears in the download URL.
+func UpdateKeyPath(client, id string) (string, error) {
+	if _, err := SubPath(client, id); err != nil {
+		return "", err
+	}
+	return "keys/" + client + "/" + id, nil
+}
+
+// UpdateKey returns the stored key, or "" when the link has none.
+func UpdateKey(ctx context.Context, client, id string) (string, error) {
+	path, err := UpdateKeyPath(client, id)
+	if err != nil {
+		return "", err
+	}
+	key, err := currentStore().Get(ctx, path)
+	if IsNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(key), nil
+}
+
+// EnsureUpdateKey creates the key for one link once and returns it.
+func EnsureUpdateKey(ctx context.Context, client, id string) (string, error) {
+	path, err := UpdateKeyPath(client, id)
+	if err != nil {
+		return "", err
+	}
+	if existing, err := currentStore().Get(ctx, path); err == nil {
+		return strings.TrimSpace(existing), nil
+	} else if !IsNotFound(err) {
+		return "", err
+	}
+	key, err := NewID()
+	if err != nil {
+		return "", err
+	}
+	if err := currentStore().Put(ctx, path, key); err != nil {
+		return "", err
+	}
+	return key, nil
+}
 
 type blobCred struct {
 	token   string

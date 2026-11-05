@@ -91,6 +91,19 @@
     #qr { margin-top: 16px; }
     #qr svg { width: 220px; height: auto; }
     .qr-miss { margin: 0; color: #555; }
+    #updater { margin-top: 12px; padding: 10px; border: 1px solid #1c1c1c; }
+    #updater[hidden] { display: none; }
+    #updater .actions { margin-top: 0; }
+    #updater .actions + .actions { margin-top: 8px; }
+    #up-link, #up-key {
+      flex: 1;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid #1c1c1c;
+      font: 13px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    #update-note { margin: 0 0 8px; color: #555; font-size: 14px; }
+    #update-note[hidden] { display: none; }
     @media (max-width: 640px) {
       .clients, .linkrow, .sheet-bar, .actions { flex-direction: column; }
       .sheet-actions { width: 100%; }
@@ -119,6 +132,18 @@
         <label class="file">选择文件<input id="file" type="file" accept=".conf,.txt,.yaml,.yml,.list"></label>
         <button type="button" id="make" hidden>生成</button>
       </div>
+      <div id="updater" hidden>
+        <p id="update-note"></p>
+        <div class="actions">
+          <input id="up-link" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="要更新的链接，或链接里的 id">
+          <input id="up-key" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="更新密钥">
+        </div>
+        <div class="actions">
+          <button type="button" id="up-save">保存密钥</button>
+          <button type="button" id="up-forget">忘记密钥</button>
+          <button type="button" id="up-cancel">取消</button>
+        </div>
+      </div>
       <div class="clients" role="group" aria-label="客户端">
         <button type="button" data-client="qx" aria-pressed="true">Quantumult X</button>
         <button type="button" data-client="sr" aria-pressed="false">Shadowrocket</button>
@@ -131,12 +156,13 @@
       <div class="linkrow">
         <code id="link"></code>
         <button type="button" id="copy">复制</button>
+        <button type="button" id="update" hidden>更新</button>
         <button type="button" id="remove" hidden>删除</button>
       </div>
       <div id="qr"></div>
     </section>
   </main>
   <script src="assets/qrcode.js"></script>
-  <script src="assets/app.js?v=3"></script>
+  <script src="assets/app.js?v=4"></script>
 </body>
 </html>

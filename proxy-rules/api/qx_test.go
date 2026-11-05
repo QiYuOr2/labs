@@ -551,7 +551,12 @@ func TestUploadMergesBody(t *testing.T) {
 		t.Fatalf("get %d %s", rec.Code, rec.Body.String())
 	}
 
-	again := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+id, strings.NewReader("[server_local]\ntrojan=example.com:8443, password=next, tag=大阪\n"))
+	// One key per link, so the page can replace a link it did not save.
+	key, err := serve.UpdateKey(t.Context(), "qx", id)
+	if err != nil || !serve.ValidID(key) {
+		t.Fatalf("key %q %v", key, err)
+	}
+	again := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+id+"&update="+key, strings.NewReader("[server_local]\ntrojan=example.com:8443, password=next, tag=大阪\n"))
 	rec = httptest.NewRecorder()
 	Handler(rec, again)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), id) {
@@ -560,6 +565,104 @@ func TestUploadMergesBody(t *testing.T) {
 	saved, err = store.Get(t.Context(), "subs/qx/"+id)
 	if err != nil || !strings.Contains(saved, "trojan=example.com:8443") || strings.Contains(saved, "vmess=example.com:443") {
 		t.Fatalf("overwrite stored %v", err)
+	}
+
+	// The page needs the same id back, and the key that keeps updates open.
+	var overwritten struct {
+		URL       string `json:"url"`
+		UpdateKey string `json:"updateKey"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &overwritten); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(overwritten.URL, "/api/qx?id="+id) {
+		t.Fatalf("overwrite url %s", overwritten.URL)
+	}
+	if overwritten.UpdateKey != key {
+		t.Fatalf("key came back as %q, want %q", overwritten.UpdateKey, key)
+	}
+
+	// A second upload keeps the same key, so the page can reuse it.
+	next := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+id+"&update="+key, strings.NewReader("[server_local]\ntrojan=example.com:9443, password=later, tag=大阪\n"))
+	rec = httptest.NewRecorder()
+	Handler(rec, next)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reupload %d %s", rec.Code, rec.Body.String())
+	}
+	var reuploaded struct {
+		UpdateKey string `json:"updateKey"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &reuploaded); err != nil {
+		t.Fatal(err)
+	}
+	if reuploaded.UpdateKey != key {
+		t.Fatalf("key changed %q -> %q", key, reuploaded.UpdateKey)
+	}
+
+	// No key at all is refused once a key exists, so a leaked id alone is not
+	// enough to replace the file.
+	guessed := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+id, strings.NewReader("[server_local]\ntrojan=example.com:443, password=evil, tag=坏\n"))
+	rec = httptest.NewRecorder()
+	Handler(rec, guessed)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("missing key %d %s", rec.Code, rec.Body.String())
+	}
+
+	// A wrong key leaves the stored file alone.
+	wrong := strings.Repeat("0", 32)
+	stale := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+id+"&update="+wrong, strings.NewReader("[server_local]\ntrojan=example.com:443, password=evil, tag=坏\n"))
+	rec = httptest.NewRecorder()
+	Handler(rec, stale)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("wrong key %d %s", rec.Code, rec.Body.String())
+	}
+	if saved, err := store.Get(t.Context(), "subs/qx/"+id); err != nil || strings.Contains(saved, "evil") {
+		t.Fatalf("wrong key wrote %v", err)
+	}
+
+	// A link that does not exist cannot be created by guessing an id.
+	ghost := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+strings.Repeat("a", 32), strings.NewReader("[server_local]\ntrojan=example.com:443, password=ghost, tag=幽灵\n"))
+	rec = httptest.NewRecorder()
+	Handler(rec, ghost)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("ghost id %d %s", rec.Code, rec.Body.String())
+	}
+
+	// A link stored before keys existed has none, and stays writable so the
+	// clients already pointing at it can be corrected.
+	oldID := strings.Repeat("b", 32)
+	if err := store.Put(t.Context(), "subs/qx/"+oldID, "[dns]\n\n[server_local]\nvmess=old.example:443, password=old, tag=旧\n"); err != nil {
+		t.Fatal(err)
+	}
+	legacy := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+oldID, strings.NewReader("[server_local]\ntrojan=legacy.example:443, password=legacy, tag=新\n"))
+	rec = httptest.NewRecorder()
+	Handler(rec, legacy)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("legacy overwrite %d %s", rec.Code, rec.Body.String())
+	}
+	if key, err := serve.UpdateKey(t.Context(), "qx", oldID); err != nil || key == "" {
+		t.Fatalf("legacy key %q %v", key, err)
+	}
+
+	// Updating with the right key writes again and keeps the url.
+	right := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+id+"&update="+key, strings.NewReader("[server_local]\ntrojan=example.com:8443, password=next, tag=东京\n"))
+	rec = httptest.NewRecorder()
+	Handler(rec, right)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("right key %d %s", rec.Code, rec.Body.String())
+	}
+	if saved, err := store.Get(t.Context(), "subs/qx/"+id); err != nil || !strings.Contains(saved, "tag=东京") {
+		t.Fatalf("right key stored %v", err)
+	}
+	// Deleting the link drops the key too, so its id cannot come back.
+	del := httptest.NewRequest(http.MethodDelete, "/api/qx?id="+id, nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, del)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete %d %s", rec.Code, rec.Body.String())
+	}
+	if left, err := serve.UpdateKey(t.Context(), "qx", id); err != nil || left != "" {
+		t.Fatalf("key survived delete %q %v", left, err)
 	}
 
 	missing := httptest.NewRequest(http.MethodGet, "/api/qx", nil)
