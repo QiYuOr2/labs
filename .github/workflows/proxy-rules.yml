@@ -30,7 +30,9 @@ jobs:
         with:
           node-version: "22"
       - name: test
-        run: go -C proxy-rules test ./...
+        run: |
+          node --test proxy-rules/assets/app.test.cjs
+          go -C proxy-rules test ./...
       - name: check
         run: go -C proxy-rules run ./cmd/check
       - name: render

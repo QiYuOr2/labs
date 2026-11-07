@@ -796,16 +796,22 @@
   }
 
   function normalize(value) {
-    var raw = value.trim().replace(/^['"]|['"]$/g, "");
+    var raw = value.trim();
     if (!raw) {
       return "";
     }
     try {
-      var parsed = new URL(raw);
+      // Only unwrap a quoted URL. A trailing quote can belong to YAML.
+      var candidate = raw;
+      if ((raw[0] === "'" || raw[0] === '"') && raw[raw.length - 1] === raw[0]) {
+        candidate = raw.slice(1, -1).trim();
+      }
+      var parsed = new URL(candidate);
       var nested = parsed.searchParams.get("url");
       if (nested && (parsed.pathname === "/api/qx" || parsed.pathname === "/api/sr")) {
         return nested.trim();
       }
+      return candidate;
     } catch (error) {}
     return raw;
   }
