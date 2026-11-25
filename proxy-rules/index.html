@@ -36,8 +36,7 @@
       margin: 0 auto;
       padding: 56px 0 64px;
     }
-    h1 { margin: 0 0 4px; font-size: 24px; font-weight: 650; letter-spacing: -0.01em; }
-    .lead { margin: 0 0 28px; color: var(--muted); font-size: 14px; }
+    h1 { margin: 0 0 24px; font-size: 24px; font-weight: 650; letter-spacing: -0.01em; }
 
     /* 通用控件：按钮层级 */
     button, .file {
@@ -264,30 +263,17 @@
     .linkrow-item .hintline { color: var(--danger); font-size: 12px; margin: 0 16px 10px; min-height: 0; }
     .linkrow-item .hintline:empty { display: none; }
 
-    /* 列表解锁 —— 参考 coss/ui 的输入卡片：标题、说明、带 label 的输入、整宽主按钮 */
+    /* 列表解锁 —— 参考 coss/ui 的输入卡片：带 label 的输入 + 整宽主按钮 */
     .lockcard {
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 24px;
+      padding: 20px;
       background: #fff;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
       max-width: 400px;
     }
-    .lockhead { display: flex; align-items: center; gap: 10px; }
-    .lockicon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 34px;
-      height: 34px;
-      border-radius: 9px;
-      background: var(--muted-bg);
-      font-size: 16px;
-    }
-    .locktitle { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
-    .locknote { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
     .lockfield { display: flex; flex-direction: column; gap: 6px; }
     .locklabel { font-size: 13px; font-weight: 500; color: #3f3f46; }
     .lockfield input { font-family: inherit; font-size: 14px; }
@@ -324,7 +310,6 @@
 <body>
   <main>
     <h1>订阅链接</h1>
-    <p class="lead">粘贴订阅或拖入配置，生成一条固定地址的订阅链接。之后换文件即可覆盖，地址不变。</p>
     <form>
       <div class="panel">
         <div id="composer">
@@ -359,7 +344,6 @@
     <section id="links" hidden>
       <div class="section-head">
         <h2>已生成的链接</h2>
-        <p class="sub">点「换文件」选一个新文件即可覆盖，地址不变。</p>
       </div>
       <div id="linklist" class="linktable"></div>
     </section>
@@ -375,6 +359,6 @@
     </section>
   </main>
   <script src="assets/qrcode.js"></script>
-  <script src="assets/app.js?v=11"></script>
+  <script src="assets/app.js?v=12"></script>
 </body>
 </html>

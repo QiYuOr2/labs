@@ -642,22 +642,6 @@
     var box = document.createElement("div");
     box.className = "lockcard";
 
-    var head = document.createElement("div");
-    head.className = "lockhead";
-    var icon = document.createElement("span");
-    icon.className = "lockicon";
-    icon.setAttribute("aria-hidden", "true");
-    icon.textContent = "🔒";
-    var title = document.createElement("h3");
-    title.className = "locktitle";
-    title.textContent = "需要密码";
-    head.appendChild(icon);
-    head.appendChild(title);
-
-    var note = document.createElement("p");
-    note.className = "locknote";
-    note.textContent = "查看已生成的链接需要密码。输入一次后本机记住，下次自动进入。";
-
     var field = document.createElement("label");
     field.className = "lockfield";
     var fieldLabel = document.createElement("span");
@@ -714,8 +698,6 @@
       }
     });
 
-    box.appendChild(head);
-    box.appendChild(note);
     box.appendChild(field);
     box.appendChild(go);
     box.appendChild(err);
