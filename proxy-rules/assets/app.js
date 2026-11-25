@@ -630,7 +630,7 @@
     } catch (error) {}
   }
 
-  // showLock renders a small password prompt inside the list section.
+  // showLock renders a password card inside the list section.
   function showLock() {
     if (!linkList) {
       return;
@@ -638,39 +638,72 @@
     linksSection.hidden = false;
     linkList.replaceChildren();
     linkList.style.border = "none";
+
     var box = document.createElement("div");
-    box.className = "lockbox";
+    box.className = "lockcard";
+
+    var head = document.createElement("div");
+    head.className = "lockhead";
+    var icon = document.createElement("span");
+    icon.className = "lockicon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "🔒";
+    var title = document.createElement("h3");
+    title.className = "locktitle";
+    title.textContent = "需要密码";
+    head.appendChild(icon);
+    head.appendChild(title);
+
     var note = document.createElement("p");
     note.className = "locknote";
-    note.textContent = "查看已生成的链接需要密码。输入一次，本机记住。";
+    note.textContent = "查看已生成的链接需要密码。输入一次后本机记住，下次自动进入。";
+
+    var field = document.createElement("label");
+    field.className = "lockfield";
+    var fieldLabel = document.createElement("span");
+    fieldLabel.className = "locklabel";
+    fieldLabel.textContent = "列表密码";
     var inputPass = document.createElement("input");
     inputPass.type = "password";
-    inputPass.placeholder = "列表密码";
+    inputPass.autocomplete = "current-password";
+    inputPass.placeholder = "输入密码";
+    field.appendChild(fieldLabel);
+    field.appendChild(inputPass);
+
     var go = document.createElement("button");
     go.type = "button";
-    go.className = "btn-solid";
-    go.textContent = "查看";
+    go.className = "btn-solid lockbtn";
+    go.textContent = "查看列表";
+
     var err = document.createElement("p");
     err.className = "lockerr";
+
     var submit = function () {
       var v = String(inputPass.value || "").trim();
       if (!v) {
         return;
       }
+      go.disabled = true;
+      go.textContent = "校验中…";
       rememberListPassword(v);
-      // Re-check quickly: keep the value only if the server accepts it.
       fetch(origin + "/api/list?format=json", { headers: { "accept": "application/json", "X-List-Password": v } })
         .then(function (r) {
           if (r.status === 401) {
             try { localStorage.removeItem("rules-list-pass"); } catch (e) {}
-            err.textContent = "密码不对";
+            err.textContent = "密码不对，请重试";
+            go.disabled = false;
+            go.textContent = "查看列表";
             return;
           }
           err.textContent = "";
+          go.disabled = false;
+          go.textContent = "查看列表";
           loadLinks();
         })
         .catch(function () {
-          err.textContent = "网络错误";
+          err.textContent = "网络错误，请重试";
+          go.disabled = false;
+          go.textContent = "查看列表";
         });
     };
     go.addEventListener("click", submit);
@@ -680,11 +713,16 @@
         submit();
       }
     });
+
+    box.appendChild(head);
     box.appendChild(note);
-    box.appendChild(inputPass);
+    box.appendChild(field);
     box.appendChild(go);
     box.appendChild(err);
     linkList.appendChild(box);
+    if (inputPass.focus) {
+      inputPass.focus();
+    }
   }
 
   function renderLinks(links) {
