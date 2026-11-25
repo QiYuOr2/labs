@@ -5,170 +5,318 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>订阅链接</title>
   <style>
+    /* 配色与圆角参考 coss.com/ui 的 shadcn 风格：中性灰白、细边框、克制阴影。 */
+    :root {
+      --bg: #ffffff;
+      --fg: #0a0a0a;
+      --muted: #71717a;
+      --muted-bg: #f4f4f5;
+      --border: #e4e4e7;
+      --border-strong: #d4d4d8;
+      --primary: #18181b;
+      --primary-fg: #fafafa;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --ring: rgba(24, 24, 27, 0.18);
+      --radius: 10px;
+      --radius-sm: 8px;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
       margin: 0;
-      color: #1c1c1c;
-      background: #fff;
-      font: 16px/1.4 "Songti SC", "Noto Serif SC", Palatino, serif;
+      color: var(--fg);
+      background: var(--bg);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
     main {
-      width: min(760px, calc(100% - 32px));
+      width: min(720px, calc(100% - 40px));
       margin: 0 auto;
-      padding: 32px 0 48px;
+      padding: 56px 0 64px;
     }
-    h1 { margin: 0 0 16px; font-size: 22px; font-weight: 600; }
-    textarea {
+    h1 { margin: 0 0 4px; font-size: 24px; font-weight: 650; letter-spacing: -0.01em; }
+    .lead { margin: 0 0 28px; color: var(--muted); font-size: 14px; }
+
+    /* 通用控件：按钮层级 */
+    button, .file {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 1px solid var(--border-strong);
+      background: #fff;
+      color: var(--fg);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1;
+      padding: 9px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease;
+      white-space: nowrap;
+    }
+    button:hover, .file:hover { background: var(--muted-bg); }
+    button:focus-visible, .file:focus-within, textarea:focus-visible, input:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--ring);
+      border-color: var(--border-strong);
+    }
+    .file input { display: none; }
+
+    textarea, input[type="text"] {
       width: 100%;
-      min-height: 88px;
-      max-height: 240px;
-      padding: 10px;
-      border: 1px solid #1c1c1c;
-      resize: vertical;
-      font: 14px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      color: var(--fg);
+      padding: 12px;
+      font: 13px/1.5 var(--mono);
+      transition: box-shadow .15s ease, border-color .15s ease;
     }
-    textarea.editing {
-      min-height: 280px;
-      max-height: 70vh;
+    textarea { min-height: 96px; max-height: 240px; resize: vertical; }
+    textarea.editing { min-height: 280px; max-height: 70vh; }
+
+    /* 新建区：一个成组的面板 */
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #fff;
     }
-    #sheet { border: 1px solid #1c1c1c; background: #fff; }
+    .panel #composer { padding: 16px; }
+    .panel textarea { border-color: var(--border); min-height: 88px; }
+    .panel-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      background: #fafafa;
+    }
+    .panel-foot .actions { margin-top: 0; }
+
+    #sheet { border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; overflow: hidden; }
     #sheet[hidden], textarea[hidden] { display: none; }
     .sheet-bar {
       display: flex;
       justify-content: space-between;
       gap: 12px;
-      align-items: flex-start;
-      padding: 8px 10px;
-      border-bottom: 1px solid #1c1c1c;
+      align-items: center;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: #fafafa;
     }
-    #meta { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
-    .sheet-actions { display: flex; gap: 8px; flex: none; }
-    .sheet-actions button { padding: 4px 8px; }
+    #meta { margin: 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+    .sheet-actions { display: flex; gap: 6px; flex: none; }
+    .sheet-actions button { padding: 6px 10px; font-size: 13px; }
     #preview {
       max-height: 320px;
       overflow: auto;
-      background: #f7f5f0;
-      font: 12px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      background: #fff;
+      font: 12px/1.6 var(--mono);
     }
     #preview.open { max-height: min(70vh, 720px); }
     .prow { display: grid; grid-template-columns: 3.5em max-content; min-width: 100%; }
     .ln {
       position: sticky;
       left: 0;
-      color: #777;
+      color: #a1a1aa;
       text-align: right;
-      padding-right: 8px;
-      background: #f7f5f0;
+      padding-right: 10px;
+      background: #fafafa;
+      border-right: 1px solid var(--border);
       user-select: none;
     }
-    .code { white-space: pre; padding-right: 12px; }
-    .gap { padding: 6px 10px; color: #555; background: #efeae2; }
-    .clients { display: flex; gap: 8px; margin-top: 12px; }
-    button, .file {
-      border: 1px solid #1c1c1c;
-      background: #fff;
-      color: #1c1c1c;
-      font: inherit;
-      padding: 8px 12px;
-      cursor: pointer;
+    .code { white-space: pre; padding: 0 10px; }
+    .gap { padding: 6px 10px; color: var(--muted); background: var(--muted-bg); font-size: 12px; }
+
+    /* 客户端分段选择 */
+    .clients {
+      display: inline-flex;
+      gap: 2px;
+      margin-top: 16px;
+      padding: 3px;
+      background: var(--muted-bg);
+      border-radius: var(--radius-sm);
     }
-    .file input { display: none; }
-    .actions { display: flex; gap: 8px; margin-top: 12px; }
-    .clients button[aria-pressed="true"] { background: #1c1c1c; color: #fff; }
-    #warning { min-height: 1.2em; margin: 8px 0 0; color: #9d2c2c; }
-    #result { margin-top: 20px; }
+    .clients button { border: none; background: transparent; padding: 7px 14px; color: var(--muted); font-size: 14px; }
+    .clients button:hover { background: rgba(0,0,0,0.04); }
+    .clients button[aria-pressed="true"] { background: #fff; color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+
+    .actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
+    #make {
+      background: var(--primary);
+      color: var(--primary-fg);
+      border-color: var(--primary);
+    }
+    #make:hover { background: #000; }
+
+    #warning { min-height: 1.2em; margin: 12px 0 0; color: var(--danger); font-size: 13px; }
+
+    /* 结果 */
+    #result { margin-top: 24px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: #fafafa; }
     #result[hidden] { display: none; }
-    #hint { margin: 0 0 12px; }
+    #hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
     .linkrow { display: flex; gap: 8px; align-items: flex-start; }
     #link {
       flex: 1;
       margin: 0;
-      padding: 10px;
+      padding: 10px 12px;
       overflow-wrap: anywhere;
-      border: 1px solid #ccc;
-      font: 13px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      font: 12px/1.5 var(--mono);
     }
+    #copy { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+    #copy:hover { background: #000; }
+    #remove { color: var(--danger); border-color: #f3c6c6; background: #fff; }
+    #remove:hover { background: var(--danger-bg); }
     #qr { margin-top: 16px; }
-    #qr svg { width: 220px; height: auto; }
-    .qr-miss { margin: 0; color: #555; }
-    /* 已生成链接列表 */
-    #links { margin-top: 32px; }
+    #qr svg { width: 200px; height: auto; }
+    .qr-miss { margin: 0; color: var(--muted); font-size: 13px; }
+
+    /* 已生成链接列表——表格式，不是卡片堆 */
+    #links { margin-top: 48px; }
     #links[hidden] { display: none; }
-    #links h2 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
-    #links .sub { color: #666; font-size: 13px; margin: 0 0 12px; }
-    .linkcard {
-      border: 1px solid #1c1c1c;
-      padding: 12px;
-      margin-bottom: 10px;
-    }
-    .linkcard .top {
+    #links .section-head {
       display: flex;
-      gap: 8px;
+      align-items: baseline;
+      gap: 10px;
+      margin: 0 0 12px;
+    }
+    #links h2 { font-size: 16px; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+    #links .sub { color: var(--muted); font-size: 13px; margin: 0; }
+
+    .linktable {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #fff;
+    }
+    .linkrow-item { border-bottom: 1px solid var(--border); }
+    .linkrow-item:last-child { border-bottom: none; }
+
+    .lrow {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 150px auto;
       align-items: center;
-      flex-wrap: wrap;
-      margin-bottom: 8px;
+      gap: 20px;
+      padding: 13px 18px;
+      transition: background .12s ease;
     }
-    .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; color: #fff; }
-    .tag.qx { background: #2f6fed; }
-    .tag.sr { background: #3ba55c; }
-    .tag.flclash { background: #8b5cf6; }
-    .tag.other { background: #888; }
-    .linkcard .idtail { font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; color: #555; }
-    .linkcard .when { color: #666; font-size: 13px; margin-left: auto; }
-    .linkcard .url {
-      margin: 8px 0 0;
-      padding: 8px;
+    .linkrow-item:hover .lrow { background: #fafafa; }
+    .lcell-ident { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .idtail { font: 12px/1.4 var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lcell-when { color: var(--muted); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+    .lcell-ops { display: flex; gap: 2px; align-items: center; justify-self: end; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 1.35;
+      letter-spacing: 0.01em;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .tag.qx { background: #e9f0ff; color: #2257d6; border-color: #d3e1ff; }
+    .tag.sr { background: #e9f8ef; color: #16803c; border-color: #cbecd8; }
+    .tag.flclash { background: #f2ecff; color: #6d3fd1; border-color: #e3d7ff; }
+    .tag.other { background: #f1f1f3; color: #52525b; border-color: #e4e4e7; }
+
+    /* 行内小按钮：ghost 风格，无边框，hover 才出现底色 */
+    .btn-ghost {
+      border: 1px solid transparent;
+      background: transparent;
+      color: #3f3f46;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 7px;
+    }
+    .btn-ghost:hover { background: var(--muted-bg); }
+    .btn-danger { color: var(--danger); }
+    .btn-danger:hover { background: var(--danger-bg); }
+
+    .linkrow-item .url {
+      margin: 0 16px 12px;
+      padding: 10px 12px;
       overflow-wrap: anywhere;
-      border: 1px solid #ccc;
-      font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font: 12px/1.5 var(--mono);
       background: #fafafa;
+      color: #3f3f46;
     }
-    .linkcard .url[hidden] { display: none; }
-    .linkcard .ops { display: flex; gap: 8px; flex-wrap: wrap; }
-    .linkcard .ops button, .linkcard .ops .file { padding: 6px 10px; font-size: 14px; }
-    .linkcard .file input { display: none; }
-    .linkcard .hintline { color: #9d2c2c; font-size: 13px; margin: 8px 0 0; min-height: 1.1em; }
+    .linkrow-item .url[hidden] { display: none; }
+    .linkrow-item .hintline { color: var(--danger); font-size: 12px; margin: 0 16px 10px; min-height: 0; }
+    .linkrow-item .hintline:empty { display: none; }
+
     @media (max-width: 640px) {
-      .clients, .linkrow, .sheet-bar, .actions { flex-direction: column; }
+      main { padding: 32px 0 40px; }
+      .clients { display: flex; }
+      .clients button { flex: 1; }
+      .linkrow, .sheet-bar, .actions { flex-direction: column; align-items: stretch; }
       .sheet-actions { width: 100%; }
-      .linkcard .when { margin-left: 0; }
+      .lrow {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .lcell-ops { flex-wrap: wrap; }
     }
   </style>
 </head>
 <body>
   <main>
     <h1>订阅链接</h1>
+    <p class="lead">粘贴订阅或拖入配置，生成一条固定地址的订阅链接。之后换文件即可覆盖，地址不变。</p>
     <form>
-      <div id="composer">
-        <textarea id="subscription" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="订阅链接，或拖入 Quantumult X / Shadowrocket / Clash 配置"></textarea>
-        <div id="sheet" hidden>
-          <div class="sheet-bar">
-            <p id="meta"></p>
-            <div class="sheet-actions">
-              <button type="button" id="toggle">展开</button>
-              <button type="button" id="edit">编辑</button>
-              <button type="button" id="clear">清空</button>
+      <div class="panel">
+        <div id="composer">
+          <textarea id="subscription" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="订阅链接，或拖入 Quantumult X / Shadowrocket / Clash 配置"></textarea>
+          <div id="sheet" hidden>
+            <div class="sheet-bar">
+              <p id="meta"></p>
+              <div class="sheet-actions">
+                <button type="button" id="toggle">展开</button>
+                <button type="button" id="edit">编辑</button>
+                <button type="button" id="clear">清空</button>
+              </div>
             </div>
+            <div id="preview"></div>
           </div>
-          <div id="preview"></div>
         </div>
-      </div>
-      <div class="actions">
-        <label class="file">选择文件<input id="file" type="file" accept=".conf,.txt,.yaml,.yml,.list"></label>
-        <button type="button" id="make" hidden>生成</button>
-      </div>
-      <div class="clients" role="group" aria-label="客户端">
-        <button type="button" data-client="qx" aria-pressed="true">Quantumult X</button>
-        <button type="button" data-client="sr" aria-pressed="false">Shadowrocket</button>
-        <button type="button" data-client="flclash" aria-pressed="false">Clash</button>
+        <div class="panel-foot">
+          <div class="clients" role="group" aria-label="客户端">
+            <button type="button" data-client="qx" aria-pressed="true">Quantumult X</button>
+            <button type="button" data-client="sr" aria-pressed="false">Shadowrocket</button>
+            <button type="button" data-client="flclash" aria-pressed="false">Clash</button>
+          </div>
+          <div class="actions">
+            <label class="file">选择文件<input id="file" type="file" accept=".conf,.txt,.yaml,.yml,.list"></label>
+            <button type="button" id="make" hidden>生成</button>
+          </div>
+        </div>
       </div>
       <p id="warning"></p>
     </form>
 
     <section id="links" hidden>
-      <h2>已生成的链接</h2>
-      <p class="sub">点「换文件覆盖」选一个新文件，就会替换这条链接的内容，地址不变。</p>
-      <div id="linklist"></div>
+      <div class="section-head">
+        <h2>已生成的链接</h2>
+        <p class="sub">点「换文件」选一个新文件即可覆盖，地址不变。</p>
+      </div>
+      <div id="linklist" class="linktable"></div>
     </section>
 
     <section id="result" hidden>
@@ -182,6 +330,6 @@
     </section>
   </main>
   <script src="assets/qrcode.js"></script>
-  <script src="assets/app.js?v=7"></script>
+  <script src="assets/app.js?v=8"></script>
 </body>
 </html>

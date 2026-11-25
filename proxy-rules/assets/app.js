@@ -611,7 +611,7 @@
     }
     linksSection.hidden = false;
     links.forEach(function (item) {
-      linkList.appendChild(buildCard(item));
+      linkList.appendChild(buildRow(item));
     });
   }
 
@@ -619,56 +619,62 @@
     return client === "sr" ? "/api/sr" : client === "flclash" ? "/api/flclash" : "/api/qx";
   }
 
-  function buildCard(item) {
-    var card = document.createElement("div");
-    card.className = "linkcard";
-    card.setAttribute("data-client", item.client);
-    card.setAttribute("data-id", item.id);
+  // buildRow is one line in the link table: type + id tail on the left,
+  // updated time, then the actions on the right. The full URL opens below.
+  function buildRow(item) {
+    var wrap = document.createElement("div");
+    wrap.className = "linkrow-item";
+    wrap.setAttribute("data-client", item.client);
+    wrap.setAttribute("data-id", item.id);
 
-    var top = document.createElement("div");
-    top.className = "top";
+    var row = document.createElement("div");
+    row.className = "lrow";
+
+    var ident = document.createElement("div");
+    ident.className = "lcell-ident";
     var tag = document.createElement("span");
     tag.className = "tag " + (clients[item.client] ? item.client : "other");
     tag.textContent = item.clientName || item.client;
     var tail = document.createElement("span");
     tail.className = "idtail";
     tail.textContent = "id 尾号 " + (item.short || "");
-    var when = document.createElement("span");
-    when.className = "when";
-    when.textContent = "更新于 " + formatTime(item.updatedAt);
-    top.appendChild(tag);
-    top.appendChild(tail);
-    top.appendChild(when);
+    ident.appendChild(tag);
+    ident.appendChild(tail);
+
+    var when = document.createElement("div");
+    when.className = "lcell-when";
+    when.textContent = formatTime(item.updatedAt);
 
     var full = origin + pathFor(item.client) + "?id=" + item.id;
 
     var ops = document.createElement("div");
-    ops.className = "ops";
+    ops.className = "lcell-ops";
 
-    // 完整链接默认收起来，需要时展开。平时只看尾号辨认即可。
     var showBtn = document.createElement("button");
     showBtn.type = "button";
-    showBtn.textContent = "显示链接";
+    showBtn.className = "btn-ghost";
+    showBtn.textContent = "链接";
     var url = document.createElement("p");
     url.className = "url";
     url.textContent = full;
     url.hidden = true;
     showBtn.addEventListener("click", function () {
       url.hidden = !url.hidden;
-      showBtn.textContent = url.hidden ? "显示链接" : "收起链接";
+      showBtn.textContent = url.hidden ? "链接" : "收起";
     });
 
     var copyBtn = document.createElement("button");
     copyBtn.type = "button";
-    copyBtn.textContent = "复制链接";
+    copyBtn.className = "btn-ghost";
+    copyBtn.textContent = "复制";
     copyBtn.addEventListener("click", function () {
-      copyText(full, copyBtn, "复制链接");
+      copyText(full, copyBtn, "复制");
     });
 
     // 换文件覆盖：选一个文件就直接覆盖这条链接，地址不变。
     var fileLabel = document.createElement("label");
-    fileLabel.className = "file";
-    fileLabel.textContent = "换文件覆盖";
+    fileLabel.className = "file btn-ghost";
+    fileLabel.textContent = "换文件";
     var fileInput = document.createElement("input");
     fileInput.type = "file";
     fileInput.accept = ".conf,.txt,.yaml,.yml,.list";
@@ -678,13 +684,13 @@
         return;
       }
       if (picked.size > 2 * 1024 * 1024) {
-        setCardHint(card, "文件过大");
+        setCardHint(wrap, "文件过大");
         return;
       }
       var reader = new FileReader();
       reader.onload = function () {
         var key = knownKey(item.client, item.id);
-        override(String(reader.result || ""), item, card, key);
+        override(String(reader.result || ""), item, wrap, key);
       };
       reader.readAsText(picked);
       fileInput.value = "";
@@ -693,7 +699,9 @@
 
     var delBtn = document.createElement("button");
     delBtn.type = "button";
+    delBtn.className = "btn-ghost btn-danger";
     delBtn.textContent = "删除";
+    delBtn.setAttribute("data-act", "danger");
     delBtn.addEventListener("click", function () {
       deleteStored({ client: item.client, id: item.id }, function () {
         if (sameStored(link.textContent, { client: item.client, id: item.id })) {
@@ -708,14 +716,17 @@
     ops.appendChild(fileLabel);
     ops.appendChild(delBtn);
 
+    row.appendChild(ident);
+    row.appendChild(when);
+    row.appendChild(ops);
+
     var hintline = document.createElement("p");
     hintline.className = "hintline";
 
-    card.appendChild(top);
-    card.appendChild(ops);
-    card.appendChild(url);
-    card.appendChild(hintline);
-    return card;
+    wrap.appendChild(row);
+    wrap.appendChild(url);
+    wrap.appendChild(hintline);
+    return wrap;
   }
 
   function formatTime(value) {
