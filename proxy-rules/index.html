@@ -91,24 +91,46 @@
     #qr { margin-top: 16px; }
     #qr svg { width: 220px; height: auto; }
     .qr-miss { margin: 0; color: #555; }
-    #updater { margin-top: 12px; padding: 10px; border: 1px solid #1c1c1c; }
-    #updater[hidden] { display: none; }
-    #updater .actions { margin-top: 0; }
-    #updater .actions + .actions { margin-top: 8px; }
-    #up-link, #up-key {
-      flex: 1;
-      min-width: 0;
-      padding: 8px;
+    /* 已生成链接列表 */
+    #links { margin-top: 32px; }
+    #links[hidden] { display: none; }
+    #links h2 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+    #links .sub { color: #666; font-size: 13px; margin: 0 0 12px; }
+    .linkcard {
       border: 1px solid #1c1c1c;
-      font: 13px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      padding: 12px;
+      margin-bottom: 10px;
     }
-    #update-note { margin: 0 0 8px; color: #555; font-size: 14px; }
-    #update-note[hidden] { display: none; }
-    .listlink { margin: 20px 0 0; font-size: 14px; }
-    .listlink a { color: #1c1c1c; }
+    .linkcard .top {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; color: #fff; }
+    .tag.qx { background: #2f6fed; }
+    .tag.sr { background: #3ba55c; }
+    .tag.flclash { background: #8b5cf6; }
+    .tag.other { background: #888; }
+    .linkcard .idtail { font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; color: #555; }
+    .linkcard .when { color: #666; font-size: 13px; margin-left: auto; }
+    .linkcard .url {
+      margin: 0 0 8px;
+      padding: 8px;
+      overflow-wrap: anywhere;
+      border: 1px solid #ccc;
+      font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
+      background: #fafafa;
+    }
+    .linkcard .ops { display: flex; gap: 8px; flex-wrap: wrap; }
+    .linkcard .ops button, .linkcard .ops .file { padding: 6px 10px; font-size: 14px; }
+    .linkcard .file input { display: none; }
+    .linkcard .hintline { color: #9d2c2c; font-size: 13px; margin: 8px 0 0; min-height: 1.1em; }
     @media (max-width: 640px) {
       .clients, .linkrow, .sheet-bar, .actions { flex-direction: column; }
       .sheet-actions { width: 100%; }
+      .linkcard .when { margin-left: 0; }
     }
   </style>
 </head>
@@ -134,18 +156,6 @@
         <label class="file">选择文件<input id="file" type="file" accept=".conf,.txt,.yaml,.yml,.list"></label>
         <button type="button" id="make" hidden>生成</button>
       </div>
-      <div id="updater" hidden>
-        <p id="update-note"></p>
-        <div class="actions">
-          <input id="up-link" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="要覆盖的链接地址（或链接里的 32 位 id）">
-          <input id="up-key" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="更新密钥（首次生成链接时显示的那串 32 位字符）">
-        </div>
-        <div class="actions">
-          <button type="button" id="up-save">选中这条链接</button>
-          <button type="button" id="up-forget">忘记密钥</button>
-          <button type="button" id="up-cancel">取消</button>
-        </div>
-      </div>
       <div class="clients" role="group" aria-label="客户端">
         <button type="button" data-client="qx" aria-pressed="true">Quantumult X</button>
         <button type="button" data-client="sr" aria-pressed="false">Shadowrocket</button>
@@ -153,19 +163,24 @@
       </div>
       <p id="warning"></p>
     </form>
-    <p class="listlink"><a href="/api/list" target="_blank" rel="noopener">查看已生成的链接（id 尾号 / 类型 / 最后更新时间）</a></p>
+
+    <section id="links" hidden>
+      <h2>已生成的链接</h2>
+      <p class="sub">点「换文件覆盖」选一个新文件，就会替换这条链接的内容，地址不变。</p>
+      <div id="linklist"></div>
+    </section>
+
     <section id="result" hidden>
       <p id="hint"></p>
       <div class="linkrow">
         <code id="link"></code>
         <button type="button" id="copy">复制</button>
-        <button type="button" id="update" hidden>更新</button>
         <button type="button" id="remove" hidden>删除</button>
       </div>
       <div id="qr"></div>
     </section>
   </main>
   <script src="assets/qrcode.js"></script>
-  <script src="assets/app.js?v=6"></script>
+  <script src="assets/app.js?v=7"></script>
 </body>
 </html>

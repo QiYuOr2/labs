@@ -35,6 +35,10 @@ function createApp(client = "qx") {
       readAsText(file) { this.result = file.body; this.onload(); }
     },
     fetch(url, options) {
+      // The page lists existing links on load; keep that off the upload log.
+      if (url.indexOf("/api/list") !== -1) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ count: 0, links: [] }) });
+      }
       requests.push({ url, ...options });
       return new Promise(() => {});
     }
