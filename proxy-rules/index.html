@@ -85,9 +85,23 @@
       border-radius: var(--radius);
       overflow: hidden;
       background: #fff;
+      transition: border-color .15s ease, box-shadow .15s ease;
     }
-    .panel #composer { padding: 16px; }
-    .panel textarea { border-color: var(--border); min-height: 88px; }
+    .panel:focus-within {
+      border-color: var(--border-strong);
+      box-shadow: 0 0 0 3px var(--ring);
+    }
+    .panel #composer { padding: 0; }
+    /* 面板本身就是输入区，内层 textarea 不再画边框，避免双层嵌套 */
+    .panel textarea {
+      border: none;
+      border-radius: 0;
+      min-height: 96px;
+      padding: 16px;
+      box-shadow: none !important;
+      background: transparent;
+    }
+    .panel #sheet { border: none; border-radius: 0; border-top: 1px solid var(--border); }
     .panel-foot {
       display: flex;
       align-items: center;
