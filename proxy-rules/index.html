@@ -293,17 +293,40 @@
     .lockbtn { width: 100%; }
 
     @media (max-width: 640px) {
-      main { padding: 32px 0 40px; }
-      .clients { display: flex; }
-      .clients button { flex: 1; }
-      .linkrow, .sheet-bar, .actions { flex-direction: column; align-items: stretch; }
-      .sheet-actions { width: 100%; }
+      html, body { overflow-x: hidden; }
+      main { padding: 28px 0 40px; width: min(720px, calc(100% - 28px)); }
+      h1 { font-size: 21px; margin-bottom: 20px; }
+
+      /* 面板底栏：客户端一行（可横向滚动，不撑破），操作一行铺满 */
+      .panel-foot { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px; }
+      .clients { display: flex; width: 100%; overflow-x: auto; }
+      .clients button { flex: 0 0 auto; padding: 8px 14px; }
+      .panel-foot .actions { display: flex; width: 100%; gap: 8px; }
+      .panel-foot .actions .file { flex: 1; justify-content: center; }
+      .panel-foot .actions #make { flex: 1; }
+
+      /* 列表行：两行网格，紧凑不散 */
       .lrow {
-        grid-template-columns: 1fr;
-        gap: 8px;
-        align-items: flex-start;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+          "ident when"
+          "ops   ops";
+        gap: 6px 12px;
+        align-items: center;
+        padding: 12px 14px;
       }
-      .lcell-ops { flex-wrap: wrap; }
+      .lcell-ident { grid-area: ident; min-width: 0; }
+      .lcell-when { grid-area: when; font-size: 12px; }
+      .lcell-ops { grid-area: ops; justify-content: flex-end; width: 100%; }
+      #links { margin-top: 32px; }
+
+      /* 结果区：链接框独占一行，复制/删除并排 */
+      .linkrow { flex-direction: row; flex-wrap: wrap; }
+      #link { flex: 1 1 100%; }
+      #copy, #remove { flex: 1; }
+
+      .sheet-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+      .sheet-actions { width: 100%; }
     }
   </style>
 </head>
@@ -359,6 +382,6 @@
     </section>
   </main>
   <script src="assets/qrcode.js"></script>
-  <script src="assets/app.js?v=12"></script>
+  <script src="assets/app.js?v=13"></script>
 </body>
 </html>
