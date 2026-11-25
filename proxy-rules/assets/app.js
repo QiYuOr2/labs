@@ -615,12 +615,8 @@
     });
   }
 
-  function pathFor(client) {
-    return client === "sr" ? "/api/sr" : client === "flclash" ? "/api/flclash" : "/api/qx";
-  }
-
   // buildRow is one line in the link table: type + id tail on the left,
-  // updated time, then the actions on the right. The full URL opens below.
+  // updated time, then the actions on the right.
   function buildRow(item) {
     var wrap = document.createElement("div");
     wrap.className = "linkrow-item";
@@ -645,31 +641,8 @@
     when.className = "lcell-when";
     when.textContent = formatTime(item.updatedAt);
 
-    var full = origin + pathFor(item.client) + "?id=" + item.id;
-
     var ops = document.createElement("div");
     ops.className = "lcell-ops";
-
-    var showBtn = document.createElement("button");
-    showBtn.type = "button";
-    showBtn.className = "btn-ghost";
-    showBtn.textContent = "链接";
-    var url = document.createElement("p");
-    url.className = "url";
-    url.textContent = full;
-    url.hidden = true;
-    showBtn.addEventListener("click", function () {
-      url.hidden = !url.hidden;
-      showBtn.textContent = url.hidden ? "链接" : "收起";
-    });
-
-    var copyBtn = document.createElement("button");
-    copyBtn.type = "button";
-    copyBtn.className = "btn-ghost";
-    copyBtn.textContent = "复制";
-    copyBtn.addEventListener("click", function () {
-      copyText(full, copyBtn, "复制");
-    });
 
     // 换文件覆盖：选一个文件就直接覆盖这条链接，地址不变。
     var fileLabel = document.createElement("label");
@@ -711,8 +684,6 @@
       });
     });
 
-    ops.appendChild(showBtn);
-    ops.appendChild(copyBtn);
     ops.appendChild(fileLabel);
     ops.appendChild(delBtn);
 
@@ -724,7 +695,6 @@
     hintline.className = "hintline";
 
     wrap.appendChild(row);
-    wrap.appendChild(url);
     wrap.appendChild(hintline);
     return wrap;
   }
