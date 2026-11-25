@@ -3,6 +3,7 @@ package handler
 import (
 	"bufio"
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -1331,9 +1332,15 @@ func writeError(w http.ResponseWriter, msg string, status int) {
 
 // handleList answers /api/list with every generated link. JSON by default;
 // ?format=html renders a small table a browser can read directly.
+// It is protected by the LIST_PASSWORD env var, sent as X-List-Password.
 func handleList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		writeError(w, "只接受 GET", http.StatusMethodNotAllowed)
+		return
+	}
+	if !listAuthorized(r) {
+		w.Header().Set("Cache-Control", "no-store")
+		writeError(w, "需要密码", http.StatusUnauthorized)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
@@ -1365,6 +1372,23 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = w.Write([]byte(renderLinkListHTML(links)))
+}
+
+// listAuthorized checks the shared list password. When LIST_PASSWORD is unset
+// the list stays closed, so a missing env var cannot leak every link.
+func listAuthorized(r *http.Request) bool {
+	want := strings.TrimSpace(os.Getenv("LIST_PASSWORD"))
+	if want == "" {
+		return false
+	}
+	got := strings.TrimSpace(r.Header.Get("X-List-Password"))
+	if got == "" {
+		got = strings.TrimSpace(r.URL.Query().Get("password"))
+	}
+	if len(got) != len(want) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
 }
 
 func renderLinkListHTML(links []serve.LinkInfo) string {

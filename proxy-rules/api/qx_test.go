@@ -938,6 +938,7 @@ func TestMergeQuantumultXDropsSystemDNS(t *testing.T) {
 }
 
 func TestListEndpoint(t *testing.T) {
+	t.Setenv("LIST_PASSWORD", "s3cret-pass")
 	serve.SetLister(func(ctx context.Context, prefix string) ([]serve.BlobEntry, error) {
 		return []serve.BlobEntry{
 			{Pathname: "subs/qx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01", Size: 2048, UploadedAt: "2026-11-20T03:00:00Z"},
@@ -949,8 +950,22 @@ func TestListEndpoint(t *testing.T) {
 	})
 	t.Cleanup(func() { serve.SetLister(nil) })
 
+	// No password and wrong password are refused.
+	for _, pass := range []string{"", "wrong"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/list", nil)
+		if pass != "" {
+			req.Header.Set("X-List-Password", pass)
+		}
+		rec := httptest.NewRecorder()
+		Handler(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("pass %q got %d, want 401", pass, rec.Code)
+		}
+	}
+
 	// HTML table: newest first, keys/ and invalid ids skipped, type labels shown.
 	htmlReq := httptest.NewRequest(http.MethodGet, "/api/list", nil)
+	htmlReq.Header.Set("X-List-Password", "s3cret-pass")
 	rec := httptest.NewRecorder()
 	Handler(rec, htmlReq)
 	if rec.Code != http.StatusOK {
@@ -972,6 +987,7 @@ func TestListEndpoint(t *testing.T) {
 
 	// JSON shape.
 	jsonReq := httptest.NewRequest(http.MethodGet, "/api/list?format=json", nil)
+	jsonReq.Header.Set("X-List-Password", "s3cret-pass")
 	rec = httptest.NewRecorder()
 	Handler(rec, jsonReq)
 	if rec.Code != http.StatusOK {

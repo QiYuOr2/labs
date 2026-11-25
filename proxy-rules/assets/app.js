@@ -582,28 +582,116 @@
     }
   }
 
-  // loadLinks fills the "已生成的链接" list from /api/list.
+  // loadLinks fills the "已生成的链接" list from /api/list. The list is
+  // protected by a shared password the user sets once and is kept locally.
   function loadLinks() {
     if (!linksSection) {
       return;
     }
-    fetch(origin + "/api/list?format=json", { headers: { "accept": "application/json" } })
+    var pass = listPassword();
+    var headers = { "accept": "application/json" };
+    if (pass) {
+      headers["X-List-Password"] = pass;
+    }
+    fetch(origin + "/api/list?format=json", { headers: headers })
       .then(function (r) {
+        if (r.status === 401) {
+          return { locked: true };
+        }
+        if (!r.ok) {
+          throw new Error("http " + r.status);
+        }
         return r.json();
       })
       .then(function (payload) {
+        if (payload && payload.locked) {
+          showLock();
+          return;
+        }
         renderLinks(payload.links || []);
       })
       .catch(function () {
-        // 存储还没配好或网络问题：静默隐藏列表，不打扰主流程。
+        // 存储没配好或网络问题：隐藏列表，不打断主流程。
         linksSection.hidden = true;
       });
+  }
+
+  function listPassword() {
+    try {
+      return localStorage.getItem("rules-list-pass") || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function rememberListPassword(value) {
+    try {
+      localStorage.setItem("rules-list-pass", value);
+    } catch (error) {}
+  }
+
+  // showLock renders a small password prompt inside the list section.
+  function showLock() {
+    if (!linkList) {
+      return;
+    }
+    linksSection.hidden = false;
+    linkList.replaceChildren();
+    linkList.style.border = "none";
+    var box = document.createElement("div");
+    box.className = "lockbox";
+    var note = document.createElement("p");
+    note.className = "locknote";
+    note.textContent = "查看已生成的链接需要密码。输入一次，本机记住。";
+    var inputPass = document.createElement("input");
+    inputPass.type = "password";
+    inputPass.placeholder = "列表密码";
+    var go = document.createElement("button");
+    go.type = "button";
+    go.className = "btn-solid";
+    go.textContent = "查看";
+    var err = document.createElement("p");
+    err.className = "lockerr";
+    var submit = function () {
+      var v = String(inputPass.value || "").trim();
+      if (!v) {
+        return;
+      }
+      rememberListPassword(v);
+      // Re-check quickly: keep the value only if the server accepts it.
+      fetch(origin + "/api/list?format=json", { headers: { "accept": "application/json", "X-List-Password": v } })
+        .then(function (r) {
+          if (r.status === 401) {
+            try { localStorage.removeItem("rules-list-pass"); } catch (e) {}
+            err.textContent = "密码不对";
+            return;
+          }
+          err.textContent = "";
+          loadLinks();
+        })
+        .catch(function () {
+          err.textContent = "网络错误";
+        });
+    };
+    go.addEventListener("click", submit);
+    inputPass.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submit();
+      }
+    });
+    box.appendChild(note);
+    box.appendChild(inputPass);
+    box.appendChild(go);
+    box.appendChild(err);
+    linkList.appendChild(box);
   }
 
   function renderLinks(links) {
     if (!linkList) {
       return;
     }
+    linkList.style.border = "";
     linkList.replaceChildren();
     if (!links.length) {
       linksSection.hidden = true;
