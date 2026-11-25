@@ -258,12 +258,39 @@ func isHeader(line string) bool {
 
 // mergeQXDNS keeps the leak block in front of a subscription's DNS lines.
 // server=/example.com/system and server=system are dropped. no-system stays.
+// Quantumult X allows only one doh-server line, so every DoH value (from the
+// leak block and the subscription) is folded into a single comma-joined line.
 func mergeQXDNS(lines []string) []string {
 	var out []string
 	seen := map[string]struct{}{}
+	var doh []string
+	dohSeen := map[string]struct{}{}
+	addDoh := func(value string) {
+		for _, part := range strings.Split(value, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			key := strings.ToLower(part)
+			if _, ok := dohSeen[key]; ok {
+				continue
+			}
+			dohSeen[key] = struct{}{}
+			doh = append(doh, part)
+		}
+	}
 	add := func(line string) {
 		line = strings.TrimSpace(line)
 		if line == "" || qxDNSUsesSystem(line) {
+			return
+		}
+		// DoH lines are merged into one line below, not kept as separate rows.
+		switch {
+		case strings.HasPrefix(line, "doh-server="):
+			addDoh(strings.TrimPrefix(line, "doh-server="))
+			return
+		case strings.HasPrefix(line, "doh3-server="):
+			addDoh(strings.TrimPrefix(line, "doh3-server="))
 			return
 		}
 		key := strings.ToLower(line)
@@ -278,6 +305,9 @@ func mergeQXDNS(lines []string) []string {
 	}
 	for _, line := range lines {
 		add(line)
+	}
+	if len(doh) > 0 {
+		out = append(out, "doh-server="+strings.Join(doh, ","))
 	}
 	return out
 }
