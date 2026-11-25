@@ -116,7 +116,9 @@ GitHub Actions 不能接这个请求。它只在推送后生成静态文件。�
 
 三个客户端的策略名都不带 emoji，图标用 Qure Color。FlClash 和 Mihomo 写在 `icon`，Quantumult X 和 Shadowrocket 写在策略行末尾的 `img-url`。导入节点时会去掉名字里的 emoji，地区规则仍按剩下的文字匹配。
 
-「🤖 AI」只有手动选择：日本、台湾、新加坡、美国、全部节点、DIRECT。没有香港，没有自动选择，没有故障转移，也没有「🚀 默认代理」。默认代理那一组里面带了自动选择和故障转移，AI 流量再跳进去就会换节点。
+「🤖 AI」只有手动选择：日本、台湾、新加坡、美国、全部节点、DIRECT。没有香港，没有自动选择，没有故障转移，也没有「🚀 默认代理」。这些地区手动组本身引用的是地区自动组，所以 AI 选到某个地区后，在该地区内自动切换，但不会跨地区乱跳。
+
+「🚀 默认代理」的候选包含各地区的自动组（香港自动、日本自动、台湾自动、狮城自动、美国自动）和全局自动选择。想要「选到某个地区后该地区自动切换」，在默认代理里选对应地区自动组；想固定某个具体节点，进入该地区手动节点组里点选。
 
 名单在 `rules/ai.list`，只收具体产品域名，例如 OpenAI、Claude、Google AI、Grok、Perplexity、Cursor、Copilot、Mistral、Groq、OpenRouter、Hugging Face、Midjourney、Suno、Poe、Cindy。不收 `auth0`、`stripe`、`sentry`、`amazonaws`、`cloudflare`、`googleapis`、`www.bing.com` 这种会被大量无关网站命中的域名，也不收 DeepSeek、Kimi、豆包。
 
@@ -129,7 +131,7 @@ Cindy 只收 `cindy.app`、`cindy.com.cn`、`cindy.cn` 三个后缀。国际版�
 - Disney+ 和 TikTok 不放香港，也不放全局自动选择，只留日、台、新、美。
 - PayPal 不放台湾。
 - Bahamut 只有香港和台湾。
-- YouTube、Netflix、Spotify、Telegram、Google 这些可以走默认代理。默认代理里才提供自动选择和故障转移。
+- YouTube、Netflix、Spotify、Telegram、Google 这些可以走默认代理。默认代理和各泛用组都提供地区自动组（香港/日本/台湾/狮城/美国自动）和全局自动选择。
 
 地区正则按大小写分开写，不用 `(?i)`。Quantumult X 和 Shadowrocket 会解析失败。
 
