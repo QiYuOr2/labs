@@ -118,6 +118,10 @@
     expanded = false;
     edit.textContent = "编辑";
     input.classList.remove("editing");
+    // 清空就是重新开始：不再把下次生成当成覆盖本 tab 上次那条链接，
+    // 免得用户以为在新建，却被当成覆盖旧链接而报「需要密钥」。
+    closeUpdater();
+    forgetStoredId(current);
     render(false);
   });
   toggle.addEventListener("click", function () {
@@ -239,7 +243,7 @@
     // yet until a new file is in the box.
     make.hidden = !config;
     if (owned) {
-      warning.textContent = "正在修改这条链接。换一个文件后点「更新」保存，地址不变。";
+      warning.textContent = "正在覆盖这条链接。选一个文件点「生成」保存，地址不变。";
       hideResult();
       return;
     }
@@ -470,9 +474,18 @@
         return;
       }
       if (!response.ok) {
-        warning.textContent = response.status === 404
-          ? "这条配置不存在，或更新密钥不对"
-          : failureText(response.status, response.text);
+        // 服务端已经给出具体原因（链接不存在 / 需要密钥 / 密钥错 / 存储没配好），
+        // 直接展示，并补一句下一步建议，别让用户面对一句看不懂的通用错误。
+        var reason = failureText(response.status, response.text);
+        var next = "";
+        if (response.status === 403) {
+          next = "请到「覆盖已有链接」里贴上这条链接和它的更新密钥，再上传文件。";
+        } else if (response.status === 404) {
+          next = "这条链接可能已被删除或地址不对。可以清空后直接重新生成一条新链接。";
+        } else if (response.status === 503) {
+          next = "服务端还没配置好存储，请稍后再试或联系维护者。";
+        }
+        warning.textContent = next ? reason + " " + next : reason;
         return;
       }
       var payload;
@@ -542,6 +555,7 @@
     // Only a link this page can address has an update to offer.
     if (updateBtn) {
       updateBtn.hidden = !here;
+      updateBtn.textContent = "覆盖此链接";
       if (here) {
         updateBtn.setAttribute("data-id", here.id);
         updateBtn.setAttribute("data-client", here.client);
@@ -554,7 +568,7 @@
   }
 
   function idleHint() {
-    return target() ? "换一个文件后点「更新」，这条链接的地址不变。" : "";
+    return target() ? "选一个文件点「生成」，这条链接的地址不变。" : "";
   }
 
   function targetHint() {
@@ -577,8 +591,8 @@
     upLink.value = here.url;
     upKey.value = key || "";
     updateNote.textContent = key
-      ? "这条链接可以更新。换一个文件，再点「更新」。"
-      : "这条链接没有本机密钥。密钥在上传那一刻给过一次，贴进来才能覆盖。";
+      ? "这条链接可以在本机覆盖。换一个文件后点下面的「保存并覆盖」，地址不变。"
+      : "这条链接不是在本浏览器生成的，需要它的更新密钥才能覆盖。密钥只在第一次生成这条链接时显示过一次，请把它贴到下面；没有密钥就无法覆盖这条链接，可以清空后重新生成一条新的。";
     updateNote.hidden = false;
     updater.hidden = false;
     setTarget({ client: here.client, id: here.id, key: key });
@@ -623,8 +637,8 @@
       updater.hidden = true;
     }
     render(false);
-    showLink(found.url, targetHint() + " 换一个文件后点「更新」保存。");
-    warning.textContent = "已选中这条链接。换一个文件后点「更新」，地址不变。";
+    showLink(found.url, targetHint() + " 然后在上面选一个文件，点「生成」即可覆盖，地址不变。");
+    warning.textContent = "已选中这条链接。选一个文件点「生成」，地址不变。";
   }
 
   // idOnly reads a bare 32 hex id, so the key can be typed next to it.
@@ -784,6 +798,14 @@
       if (sessionStorage.getItem("rules-id-" + client) === id) {
         sessionStorage.removeItem("rules-id-" + client);
       }
+    } catch (error) {}
+  }
+
+  // forgetStoredId drops the remembered id for a client so the next upload
+  // creates a fresh link instead of overwriting the previous one.
+  function forgetStoredId(client) {
+    try {
+      sessionStorage.removeItem("rules-id-" + client);
     } catch (error) {}
   }
 

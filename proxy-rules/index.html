@@ -104,6 +104,8 @@
     }
     #update-note { margin: 0 0 8px; color: #555; font-size: 14px; }
     #update-note[hidden] { display: none; }
+    .listlink { margin: 20px 0 0; font-size: 14px; }
+    .listlink a { color: #1c1c1c; }
     @media (max-width: 640px) {
       .clients, .linkrow, .sheet-bar, .actions { flex-direction: column; }
       .sheet-actions { width: 100%; }
@@ -135,11 +137,11 @@
       <div id="updater" hidden>
         <p id="update-note"></p>
         <div class="actions">
-          <input id="up-link" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="要更新的链接，或链接里的 id">
-          <input id="up-key" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="更新密钥">
+          <input id="up-link" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="要覆盖的链接地址（或链接里的 32 位 id）">
+          <input id="up-key" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="更新密钥（首次生成链接时显示的那串 32 位字符）">
         </div>
         <div class="actions">
-          <button type="button" id="up-save">保存密钥</button>
+          <button type="button" id="up-save">选中这条链接</button>
           <button type="button" id="up-forget">忘记密钥</button>
           <button type="button" id="up-cancel">取消</button>
         </div>
@@ -151,6 +153,7 @@
       </div>
       <p id="warning"></p>
     </form>
+    <p class="listlink"><a href="/api/list" target="_blank" rel="noopener">查看已生成的链接（id 尾号 / 类型 / 最后更新时间）</a></p>
     <section id="result" hidden>
       <p id="hint"></p>
       <div class="linkrow">
@@ -163,6 +166,6 @@
     </section>
   </main>
   <script src="assets/qrcode.js"></script>
-  <script src="assets/app.js?v=5"></script>
+  <script src="assets/app.js?v=6"></script>
 </body>
 </html>

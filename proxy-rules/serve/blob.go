@@ -379,3 +379,59 @@ func storeIDFromToken(token string) string {
 	}
 	return parts[3]
 }
+
+// BlobEntry is one stored object as reported by the Vercel Blob list API.
+type BlobEntry struct {
+	Pathname   string `json:"pathname"`
+	Size       int64  `json:"size"`
+	UploadedAt string `json:"uploadedAt"`
+}
+
+// ListBlobs returns stored objects whose pathname starts with prefix.
+// It walks the pages the API returns so a full listing is not cut at one page.
+func ListBlobs(ctx context.Context, prefix string) ([]BlobEntry, error) {
+	auth, err := blobAuth()
+	if err != nil {
+		return nil, err
+	}
+	var all []BlobEntry
+	cursor := ""
+	for i := 0; i < 50; i++ {
+		endpoint := "https://vercel.com/api/blob?prefix=" + url.QueryEscape(prefix) + "&limit=1000"
+		if cursor != "" {
+			endpoint += "&cursor=" + url.QueryEscape(cursor)
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return nil, fmt.Errorf("列取失败")
+		}
+		req.Header.Set("Authorization", "Bearer "+auth.token)
+		req.Header.Set("x-api-version", blobAPIVersion)
+		if auth.oidc {
+			req.Header.Set("x-vercel-blob-store-id", auth.storeID)
+		}
+		resp, err := blobHTTP.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("列取失败")
+		}
+		payload, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("列取失败")
+		}
+		var out struct {
+			Blobs  []BlobEntry `json:"blobs"`
+			Cursor string      `json:"cursor"`
+			HasMore bool       `json:"hasMore"`
+		}
+		if err := json.Unmarshal(payload, &out); err != nil {
+			return nil, fmt.Errorf("列取失败")
+		}
+		all = append(all, out.Blobs...)
+		if !out.HasMore || out.Cursor == "" {
+			break
+		}
+		cursor = out.Cursor
+	}
+	return all, nil
+}

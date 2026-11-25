@@ -1299,11 +1299,115 @@ func writeError(w http.ResponseWriter, msg string, status int) {
 	http.Error(w, msg, status)
 }
 
+// handleList answers /api/list with every generated link. JSON by default;
+// ?format=html renders a small table a browser can read directly.
+func handleList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		writeError(w, "只接受 GET", http.StatusMethodNotAllowed)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	links, err := serve.ListLinks(ctx)
+	if err != nil {
+		status := http.StatusBadGateway
+		if err.Error() == "存储还没配好" {
+			status = http.StatusServiceUnavailable
+		}
+		writeError(w, err.Error(), status)
+		return
+	}
+	if strings.EqualFold(r.URL.Query().Get("format"), "json") {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method == http.MethodHead {
+			return
+		}
+		_ = json.NewEncoder(w).Encode(struct {
+			Count int              `json:"count"`
+			Links []serve.LinkInfo `json:"links"`
+		}{Count: len(links), Links: links})
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method == http.MethodHead {
+		return
+	}
+	_, _ = w.Write([]byte(renderLinkListHTML(links)))
+}
+
+func renderLinkListHTML(links []serve.LinkInfo) string {
+	var b strings.Builder
+	b.WriteString(`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">`)
+	b.WriteString(`<meta name="viewport" content="width=device-width, initial-scale=1">`)
+	b.WriteString(`<title>已生成的链接</title><style>`)
+	b.WriteString(`body{margin:0;padding:24px;font:15px/1.5 -apple-system,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;color:#1c1c1c}`)
+	b.WriteString(`h1{font-size:20px;margin:0 0 4px}p.hint{color:#666;margin:0 0 16px;font-size:13px}`)
+	b.WriteString(`table{border-collapse:collapse;width:100%;max-width:900px}`)
+	b.WriteString(`th,td{border:1px solid #ddd;padding:6px 10px;text-align:left;font-size:14px;vertical-align:top}`)
+	b.WriteString(`th{background:#f5f5f5;font-weight:600}td.mono{font-family:ui-monospace,Consolas,monospace}`)
+	b.WriteString(`.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;color:#fff}`)
+	b.WriteString(`.qx{background:#2f6fed}.sr{background:#3ba55c}.flclash{background:#8b5cf6}.other{background:#888}`)
+	b.WriteString(`</style></head><body>`)
+	b.WriteString("<h1>已生成的链接</h1>")
+	b.WriteString(`<p class="hint">按最后更新时间倒序。id 尾号是链接 <code>?id=</code> 后的最后 8 位。共 `)
+	b.WriteString(fmt.Sprintf("%d", len(links)))
+	b.WriteString(` 条。</p>`)
+	if len(links) == 0 {
+		b.WriteString(`<p>还没有生成过链接。</p></body></html>`)
+		return b.String()
+	}
+	b.WriteString(`<table><thead><tr><th>id 尾号</th><th>客户端类型</th><th>最后更新时间</th><th>大小</th></tr></thead><tbody>`)
+	for _, link := range links {
+		cls := link.Client
+		switch cls {
+		case "qx", "sr", "flclash":
+		default:
+			cls = "other"
+		}
+		when := link.UpdatedAt
+		if t, err := time.Parse(time.RFC3339, link.UpdatedAt); err == nil {
+			when = t.In(time.FixedZone("CST", 8*3600)).Format("2006-01-02 15:04:05")
+		}
+		b.WriteString("<tr>")
+		b.WriteString(`<td class="mono">` + htmlEscape(link.Short) + "</td>")
+		b.WriteString(`<td><span class="tag ` + cls + `">` + htmlEscape(link.ClientName) + "</span></td>")
+		b.WriteString(`<td>` + htmlEscape(when) + "</td>")
+		b.WriteString(`<td>` + humanSize(link.Size) + "</td>")
+		b.WriteString("</tr>")
+	}
+	b.WriteString(`</tbody></table></body></html>`)
+	return b.String()
+}
+
+func htmlEscape(s string) string {
+	replacer := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
+	return replacer.Replace(s)
+}
+
+func humanSize(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
+}
+
 const defaultProfileURL = "https://raw.githubusercontent.com/QiYuOr2/labs/main/proxy-rules/clients/quantumultx.conf"
 
 // Handler is the Vercel function entry. Quantumult X calls /api/qx?url=...
 func Handler(w http.ResponseWriter, r *http.Request) {
 	client := clientFrom(r)
+	// /api/list is a read-only index of generated links. It never writes, and it
+	// is meant to be opened in a browser, so it has no key of its own.
+	if client == "list" {
+		handleList(w, r)
+		return
+	}
 	switch client {
 	case "qx", "sr", "flclash":
 	default:
@@ -1432,6 +1536,8 @@ func clientFrom(r *http.Request) string {
 	}
 	path := strings.TrimSuffix(r.URL.Path, "/")
 	switch {
+	case strings.HasSuffix(path, "/api/list"):
+		return "list"
 	case strings.HasSuffix(path, "/api/sr"):
 		return "sr"
 	case strings.HasSuffix(path, "/api/flclash"):
@@ -1490,8 +1596,12 @@ func handleUpload(w http.ResponseWriter, r *http.Request, client string) {
 		checkCancel()
 		if checkErr != nil {
 			status := http.StatusNotFound
-			if checkErr.Error() == "存储还没配好" {
+			switch {
+			case checkErr.Error() == "存储还没配好":
 				status = http.StatusServiceUnavailable
+			case errors.Is(checkErr, errKeyRequired), errors.Is(checkErr, errKeyWrong):
+				// The link exists; the caller may retry with the right key.
+				status = http.StatusForbidden
 			}
 			writeError(w, checkErr.Error(), status)
 			return
@@ -1573,19 +1683,27 @@ func checkUpdate(ctx context.Context, client, id, key string) error {
 		// that already points at one could never be corrected.
 		if _, err := serve.LoadTextSaved(ctx, path); err != nil {
 			if serve.IsNotFound(err) {
-				return errNoUpdate
+				return errLinkMissing
 			}
 			return err
 		}
 		return nil
 	}
-	if key == "" || key != stored {
-		return errNoUpdate
+	// The link exists and already has a key: the caller must send that key.
+	if key == "" {
+		return errKeyRequired
+	}
+	if key != stored {
+		return errKeyWrong
 	}
 	return nil
 }
 
-var errNoUpdate = fmt.Errorf("链接无效，或更新密钥不对")
+var (
+	errLinkMissing = fmt.Errorf("这条链接不存在，检查地址或重新生成")
+	errKeyRequired = fmt.Errorf("这条链接需要更新密钥才能覆盖，密钥在首次生成时显示")
+	errKeyWrong    = fmt.Errorf("更新密钥不对")
+)
 
 func writeStored(w http.ResponseWriter, r *http.Request, client, id string) {
 	path, err := serve.SubPath(client, id)

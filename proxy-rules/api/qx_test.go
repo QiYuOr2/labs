@@ -604,7 +604,7 @@ func TestUploadMergesBody(t *testing.T) {
 	guessed := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+id, strings.NewReader("[server_local]\ntrojan=example.com:443, password=evil, tag=坏\n"))
 	rec = httptest.NewRecorder()
 	Handler(rec, guessed)
-	if rec.Code != http.StatusNotFound {
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "更新密钥") {
 		t.Fatalf("missing key %d %s", rec.Code, rec.Body.String())
 	}
 
@@ -613,7 +613,7 @@ func TestUploadMergesBody(t *testing.T) {
 	stale := httptest.NewRequest(http.MethodPost, "/api/qx?client=qx&id="+id+"&update="+wrong, strings.NewReader("[server_local]\ntrojan=example.com:443, password=evil, tag=坏\n"))
 	rec = httptest.NewRecorder()
 	Handler(rec, stale)
-	if rec.Code != http.StatusNotFound {
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "更新密钥不对") {
 		t.Fatalf("wrong key %d %s", rec.Code, rec.Body.String())
 	}
 	if saved, err := store.Get(t.Context(), "subs/qx/"+id); err != nil || strings.Contains(saved, "evil") {
@@ -934,5 +934,60 @@ func TestMergeQuantumultXDropsSystemDNS(t *testing.T) {
 	}
 	if strings.Contains(got, "/system") || strings.Contains(got, "server=system") {
 		t.Fatalf("system resolver kept\n%s", got)
+	}
+}
+
+func TestListEndpoint(t *testing.T) {
+	serve.SetLister(func(ctx context.Context, prefix string) ([]serve.BlobEntry, error) {
+		return []serve.BlobEntry{
+			{Pathname: "subs/qx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01", Size: 2048, UploadedAt: "2026-11-20T03:00:00Z"},
+			{Pathname: "subs/sr/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb02", Size: 500, UploadedAt: "2026-11-25T05:30:00Z"},
+			{Pathname: "subs/flclash/cccccccccccccccccccccccccccccc03", Size: 1024 * 1024, UploadedAt: "2026-11-22T10:00:00Z"},
+			{Pathname: "keys/qx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01", Size: 32, UploadedAt: "2026-11-20T03:00:00Z"},
+			{Pathname: "subs/qx/not-a-valid-id", Size: 1, UploadedAt: "2026-11-20T03:00:00Z"},
+		}, nil
+	})
+	t.Cleanup(func() { serve.SetLister(nil) })
+
+	// HTML table: newest first, keys/ and invalid ids skipped, type labels shown.
+	htmlReq := httptest.NewRequest(http.MethodGet, "/api/list", nil)
+	rec := httptest.NewRecorder()
+	Handler(rec, htmlReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list html %d %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"bbbbbb02", "cccccc03", "aaaaaa01", "Shadowrocket", "Clash", "Quantumult X", "<table>", "1.0 MB"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("html missing %q\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "not-a-valid-id") {
+		t.Fatal("invalid id leaked into html")
+	}
+	// Newest (sr, 2026-11-25) must appear before the oldest (qx, 2026-11-20).
+	if strings.Index(body, "bbbbbb02") > strings.Index(body, "aaaaaa01") {
+		t.Fatal("html not sorted newest first")
+	}
+
+	// JSON shape.
+	jsonReq := httptest.NewRequest(http.MethodGet, "/api/list?format=json", nil)
+	rec = httptest.NewRecorder()
+	Handler(rec, jsonReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list json %d %s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Count int              `json:"count"`
+		Links []serve.LinkInfo `json:"links"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Count != 3 || len(payload.Links) != 3 {
+		t.Fatalf("count %d links %d", payload.Count, len(payload.Links))
+	}
+	if payload.Links[0].Client != "sr" || payload.Links[0].Short != "bbbbbb02" {
+		t.Fatalf("first link %+v", payload.Links[0])
 	}
 }
