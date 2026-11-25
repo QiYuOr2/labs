@@ -632,7 +632,7 @@
     tag.textContent = item.clientName || item.client;
     var tail = document.createElement("span");
     tail.className = "idtail";
-    tail.textContent = "尾号 " + (item.short || "");
+    tail.textContent = "id 尾号 " + (item.short || "");
     var when = document.createElement("span");
     when.className = "when";
     when.textContent = "更新于 " + formatTime(item.updatedAt);
@@ -640,13 +640,23 @@
     top.appendChild(tail);
     top.appendChild(when);
 
-    var url = document.createElement("p");
-    url.className = "url";
     var full = origin + pathFor(item.client) + "?id=" + item.id;
-    url.textContent = full;
 
     var ops = document.createElement("div");
     ops.className = "ops";
+
+    // 完整链接默认收起来，需要时展开。平时只看尾号辨认即可。
+    var showBtn = document.createElement("button");
+    showBtn.type = "button";
+    showBtn.textContent = "显示链接";
+    var url = document.createElement("p");
+    url.className = "url";
+    url.textContent = full;
+    url.hidden = true;
+    showBtn.addEventListener("click", function () {
+      url.hidden = !url.hidden;
+      showBtn.textContent = url.hidden ? "显示链接" : "收起链接";
+    });
 
     var copyBtn = document.createElement("button");
     copyBtn.type = "button";
@@ -693,6 +703,7 @@
       });
     });
 
+    ops.appendChild(showBtn);
     ops.appendChild(copyBtn);
     ops.appendChild(fileLabel);
     ops.appendChild(delBtn);
@@ -701,8 +712,8 @@
     hintline.className = "hintline";
 
     card.appendChild(top);
-    card.appendChild(url);
     card.appendChild(ops);
+    card.appendChild(url);
     card.appendChild(hintline);
     return card;
   }

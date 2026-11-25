@@ -116,13 +116,14 @@
     .linkcard .idtail { font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; color: #555; }
     .linkcard .when { color: #666; font-size: 13px; margin-left: auto; }
     .linkcard .url {
-      margin: 0 0 8px;
+      margin: 8px 0 0;
       padding: 8px;
       overflow-wrap: anywhere;
       border: 1px solid #ccc;
       font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace;
       background: #fafafa;
     }
+    .linkcard .url[hidden] { display: none; }
     .linkcard .ops { display: flex; gap: 8px; flex-wrap: wrap; }
     .linkcard .ops button, .linkcard .ops .file { padding: 6px 10px; font-size: 14px; }
     .linkcard .file input { display: none; }
